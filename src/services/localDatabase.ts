@@ -84,7 +84,7 @@ const normalizeParticipant = (participant: LegacyParticipant): Participant => ({
   eventId: participant.eventId,
   name: participant.name,
   organization: participant.organization,
-  phone: participant.phone,
+  phone: participant.phone ?? "",
   email: participant.email || undefined,
   attendanceType: participant.attendanceType ?? participant.attendanceMode ?? "미정",
   registrationSource:

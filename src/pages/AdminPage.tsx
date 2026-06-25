@@ -165,9 +165,7 @@ const validateParticipantDraft = (draft: ParticipantDraft) => {
 
   if (!normalized.name) errors.push("성명을 입력해 주세요.");
   if (!normalized.organization) errors.push("소속을 입력해 주세요.");
-  if (!normalized.phone) {
-    errors.push("연락처를 입력해 주세요.");
-  } else if (!isValidPhone(normalized.phone)) {
+  if (normalized.phone && !isValidPhone(normalized.phone)) {
     errors.push("연락처 형식을 확인해 주세요. 예: 010-1234-5678");
   }
 
@@ -415,10 +413,14 @@ function AdminDashboard() {
     }
 
     const normalized = normalizeParticipantDraft(participantForm);
-    if (
-      (await participantService.hasDuplicateInEvent(selectedEvent.id, normalized.name, normalized.phone)) &&
-      !confirm("같은 이름과 연락처로 등록된 참가자가 있습니다. 그래도 등록할까요?")
-    ) {
+    const hasDuplicate = normalized.phone
+      ? await participantService.hasDuplicateInEvent(selectedEvent.id, normalized.name, normalized.phone)
+      : await participantService.hasNameInEvent(selectedEvent.id, normalized.name);
+    const duplicateMessage = normalized.phone
+      ? "같은 이름과 연락처로 등록된 참가자가 있습니다. 그래도 등록할까요?"
+      : "같은 이름으로 등록된 참가자가 있습니다. 그래도 등록할까요?";
+
+    if (hasDuplicate && !confirm(duplicateMessage)) {
       return;
     }
 
@@ -462,10 +464,14 @@ function AdminDashboard() {
       return;
     }
 
-    if (
-      (await participantService.hasDuplicateInEvent(selectedEvent.id, draft.name, draft.phone, editingParticipant.id)) &&
-      !confirm("같은 이름과 연락처로 등록된 참가자가 있습니다. 수정 내용을 저장할까요?")
-    ) {
+    const hasDuplicate = draft.phone
+      ? await participantService.hasDuplicateInEvent(selectedEvent.id, draft.name, draft.phone, editingParticipant.id)
+      : await participantService.hasNameInEvent(selectedEvent.id, draft.name, editingParticipant.id);
+    const duplicateMessage = draft.phone
+      ? "같은 이름과 연락처로 등록된 참가자가 있습니다. 수정 내용을 저장할까요?"
+      : "같은 이름으로 등록된 참가자가 있습니다. 수정 내용을 저장할까요?";
+
+    if (hasDuplicate && !confirm(duplicateMessage)) {
       return;
     }
 
@@ -1054,7 +1060,7 @@ function AdminDashboard() {
                       />
                     </label>
                     <label>
-                      <span className="field-label">연락처 *</span>
+                      <span className="field-label">연락처</span>
                       <input
                         className="field-input"
                         value={participantForm.phone}
@@ -1196,7 +1202,7 @@ function AdminDashboard() {
                         />
                       </label>
                       <label>
-                        <span className="field-label">연락처 *</span>
+                        <span className="field-label">연락처</span>
                         <input
                           className="field-input"
                           value={editingParticipant.phone}
@@ -1348,7 +1354,8 @@ function AdminDashboard() {
                           {duplicateGroups.map((group) => (
                             <div key={group.map((participant) => participant.id).join("-")} className="rounded-md border border-amber-100 bg-white p-3">
                               <p className="text-sm font-semibold text-ink-900">
-                                {group[0].name} · {group[0].phone}
+                                {group[0].name}
+                                {group[0].phone ? ` · ${group[0].phone}` : ""}
                               </p>
                               <div className="mt-2 grid gap-2">
                                 {group.map((participant) => (
@@ -1402,7 +1409,7 @@ function AdminDashboard() {
                               <td className="table-cell">{index + 1}</td>
                               <td className="table-cell font-semibold text-ink-900">{participant.name}</td>
                               <td className="table-cell">{participant.organization}</td>
-                              <td className="table-cell">{participant.phone}</td>
+                              <td className="table-cell">{participant.phone || "-"}</td>
                               <td className="table-cell">{participant.email || "-"}</td>
                               <td className="table-cell">{participant.attendanceType}</td>
                               <td className="table-cell">

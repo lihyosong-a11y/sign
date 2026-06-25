@@ -81,7 +81,9 @@ export const buildSampleData = (): DatabaseState => {
     publicRegistrationSettings: {
       ...defaultPublicRegistrationSettings,
       mode: "both",
+      collectPhone: true,
       requirePhone: false,
+      collectEmail: true,
       requireEmail: false,
     },
     createdAt: new Date().toISOString(),

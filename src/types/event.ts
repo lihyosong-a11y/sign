@@ -16,9 +16,9 @@ export interface PublicRegistrationSettings {
 
 export const defaultPublicRegistrationSettings: PublicRegistrationSettings = {
   mode: "new",
-  collectPhone: true,
-  requirePhone: true,
-  collectEmail: true,
+  collectPhone: false,
+  requirePhone: false,
+  collectEmail: false,
   requireEmail: false,
   collectAttendanceType: true,
   collectNote: true,

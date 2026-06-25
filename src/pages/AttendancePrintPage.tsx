@@ -77,6 +77,10 @@ function AttendancePrintContent() {
 
   const faceToFaceParticipants = participants.filter((participant) => participant.attendanceType === "대면");
   const printParticipants = printRange === "onsite" ? faceToFaceParticipants : participants;
+  const formatPhoneForPrint = (phone: string) => {
+    if (!phone.trim()) return "-";
+    return showFullPhone ? phone : maskPhone(phone);
+  };
 
   return (
     <main className="print-page min-h-screen bg-ink-50 px-4 py-6 sm:px-6 lg:px-8">
@@ -169,7 +173,7 @@ function AttendancePrintContent() {
                   <td className="border border-ink-700 px-2 py-3 text-center">{index + 1}</td>
                   <td className="border border-ink-700 px-2 py-3 text-center font-semibold">{participant.name}</td>
                   <td className="border border-ink-700 px-2 py-3">{participant.organization}</td>
-                  <td className="border border-ink-700 px-2 py-3 text-center">{showFullPhone ? participant.phone : maskPhone(participant.phone)}</td>
+                  <td className="border border-ink-700 px-2 py-3 text-center">{formatPhoneForPrint(participant.phone)}</td>
                   <td className="border border-ink-700 px-2 py-3 text-center">{participant.attendanceType}</td>
                   <td className="border border-ink-700 px-2 py-3 text-center">
                     {participant.attendanceStatus === "예정" ? "" : attendanceStatusLabels[participant.attendanceStatus]}

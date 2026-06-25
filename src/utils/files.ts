@@ -133,9 +133,7 @@ export const parseParticipantFile = async (file: File): Promise<ImportParticipan
 
     if (!parsed.name) parsed.errors.push("성명 누락");
     if (!parsed.organization) parsed.errors.push("소속 누락");
-    if (!parsed.phone) {
-      parsed.errors.push("연락처 누락");
-    } else if (!isValidPhone(parsed.phone)) {
+    if (parsed.phone && !isValidPhone(parsed.phone)) {
       parsed.errors.push("연락처 형식 확인");
     }
 
@@ -161,7 +159,7 @@ export const downloadParticipantTemplate = async () => {
   const worksheet = workbook.addWorksheet("참가자 업로드 양식");
   worksheet.addRows([
     ["성명", "소속", "연락처", "이메일", "참석 형태", "비고"],
-    ["홍길동", "새빛초등학교", "010-1234-5678", "teacher@school.kr", "대면", "예시 행은 삭제 후 업로드"],
+    ["홍길동", "새빛초등학교", "", "", "대면", "연락처와 이메일은 필요한 경우만 입력"],
   ]);
   worksheet.getRow(1).font = { bold: true };
   worksheet.columns = [{ width: 14 }, { width: 22 }, { width: 18 }, { width: 24 }, { width: 14 }, { width: 28 }];
