@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { QRCodeCanvas } from "qrcode.react";
 import {
   CalendarDays,
   Check,
@@ -10,8 +11,10 @@ import {
   FileSpreadsheet,
   Link as LinkIcon,
   LogOut,
+  PenLine,
   Plus,
   Printer,
+  QrCode,
   Search,
   Trash2,
   Upload,
@@ -21,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { AdminAuthGate } from "../components/AdminAuthGate";
+import { SignatureInput } from "../components/SignatureInput";
 import { buildSampleData } from "../data/sampleData";
 import { authService } from "../services/authService";
 import { eventService } from "../services/eventService";
@@ -182,6 +186,9 @@ function AdminDashboard() {
   const [showDuplicatePanel, setShowDuplicatePanel] = useState(false);
   const [importRows, setImportRows] = useState<ImportParticipantRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
+  const [qrEvent, setQrEvent] = useState<Event | null>(null);
+  const [signatureParticipant, setSignatureParticipant] = useState<Participant | null>(null);
+  const [signatureDraft, setSignatureDraft] = useState<string | undefined>();
   const [events, setEvents] = useState<Event[]>([]);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -461,6 +468,25 @@ function AdminDashboard() {
     refresh();
   };
 
+  const openSignatureDialog = (participant: Participant) => {
+    setSignatureParticipant(participant);
+    setSignatureDraft(participant.signatureDataUrl);
+  };
+
+  const handleSaveSignature = async () => {
+    if (!signatureParticipant) return;
+
+    if (signatureDraft) {
+      await participantService.saveSignature(signatureParticipant.id, signatureDraft);
+    } else {
+      await participantService.setSigned(signatureParticipant.id, false);
+    }
+
+    setSignatureParticipant(null);
+    setSignatureDraft(undefined);
+    refresh();
+  };
+
   const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -523,6 +549,16 @@ function AdminDashboard() {
   const handleLogout = () => {
     authService.signOut();
     window.location.reload();
+  };
+
+  const handleDownloadQr = () => {
+    const canvas = document.getElementById("event-qr-canvas") as HTMLCanvasElement | null;
+    if (!canvas || !qrEvent) return;
+
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${qrEvent.title.replace(/[\\/:*?"<>|]/g, "_")}_등록_QR.png`;
+    link.click();
   };
 
   return (
@@ -792,6 +828,10 @@ function AdminDashboard() {
                               <Copy size={16} aria-hidden="true" />
                               등록 링크
                             </button>
+                            <button className="btn-secondary min-h-9 px-3 py-1.5" type="button" onClick={() => setQrEvent(event)}>
+                              <QrCode size={16} aria-hidden="true" />
+                              QR 코드
+                            </button>
                             <button className="btn-secondary min-h-9 px-3 py-1.5" type="button" onClick={() => handleEditEvent(event)}>
                               <Edit3 size={16} aria-hidden="true" />
                               수정
@@ -835,6 +875,10 @@ function AdminDashboard() {
                   <button className="btn-secondary" type="button" onClick={() => copyText(getPublicEventUrl(selectedEvent.id))}>
                     <LinkIcon size={18} aria-hidden="true" />
                     공개 등록 링크 복사
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => setQrEvent(selectedEvent)}>
+                    <QrCode size={18} aria-hidden="true" />
+                    QR 코드
                   </button>
                   <button
                     className="btn-secondary"
@@ -1255,15 +1299,21 @@ function AdminDashboard() {
                                 </div>
                               </td>
                               <td className="table-cell">
-                                <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
-                                  <input
-                                    className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
-                                    type="checkbox"
-                                    checked={participant.signed}
-                                    onChange={(event) => handleSignedChange(participant.id, event.target.checked)}
-                                  />
-                                  {participant.signed ? "서명 완료" : "미서명"}
-                                </label>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
+                                    <input
+                                      className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
+                                      type="checkbox"
+                                      checked={participant.signed}
+                                      onChange={(event) => handleSignedChange(participant.id, event.target.checked)}
+                                    />
+                                    {participant.signed ? "서명 완료" : "미서명"}
+                                  </label>
+                                  <button className="btn-secondary min-h-8 px-3 py-1" type="button" onClick={() => openSignatureDialog(participant)}>
+                                    <PenLine size={14} aria-hidden="true" />
+                                    서명
+                                  </button>
+                                </div>
                               </td>
                               <td className="table-cell max-w-64 truncate">{participant.note || "-"}</td>
                               <td className="table-cell">
@@ -1296,6 +1346,89 @@ function AdminDashboard() {
           </section>
         )}
       </div>
+
+      {qrEvent ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 px-4 py-6">
+          <section className="w-full max-w-md rounded-lg border border-ink-200 bg-white p-5 shadow-soft">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-school-700">공개 등록 QR 코드</p>
+                <h2 className="mt-1 text-lg font-semibold text-ink-900">{qrEvent.title}</h2>
+              </div>
+              <button className="btn-secondary min-h-9 px-3 py-1.5" type="button" onClick={() => setQrEvent(null)}>
+                <X size={16} aria-hidden="true" />
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-5 grid place-items-center rounded-lg border border-ink-200 bg-white p-5">
+              <QRCodeCanvas id="event-qr-canvas" value={getPublicEventUrl(qrEvent.id)} size={220} includeMargin />
+            </div>
+
+            <p className="mt-4 break-all rounded-md bg-ink-50 px-3 py-2 text-sm text-ink-700">
+              {getPublicEventUrl(qrEvent.id)}
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className="btn-secondary" type="button" onClick={() => copyText(getPublicEventUrl(qrEvent.id))}>
+                <Copy size={18} aria-hidden="true" />
+                링크 복사
+              </button>
+              <button className="btn-primary" type="button" onClick={handleDownloadQr}>
+                <Download size={18} aria-hidden="true" />
+                QR 이미지 저장
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {signatureParticipant ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 px-4 py-6">
+          <section className="w-full max-w-2xl rounded-lg border border-ink-200 bg-white p-5 shadow-soft">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-school-700">참가자 직접 서명</p>
+                <h2 className="mt-1 text-lg font-semibold text-ink-900">
+                  {signatureParticipant.name} · {signatureParticipant.organization}
+                </h2>
+              </div>
+              <button
+                className="btn-secondary min-h-9 px-3 py-1.5"
+                type="button"
+                onClick={() => {
+                  setSignatureParticipant(null);
+                  setSignatureDraft(undefined);
+                }}
+              >
+                <X size={16} aria-hidden="true" />
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <SignatureInput value={signatureDraft} onChange={setSignatureDraft} />
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => {
+                  setSignatureParticipant(null);
+                  setSignatureDraft(undefined);
+                }}
+              >
+                취소
+              </button>
+              <button className="btn-primary" type="button" onClick={handleSaveSignature}>
+                <Check size={18} aria-hidden="true" />
+                서명 저장
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

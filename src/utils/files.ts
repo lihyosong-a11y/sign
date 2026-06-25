@@ -15,6 +15,7 @@ const headerCandidates: Record<keyof ParticipantDraft, string[]> = {
   email: ["이메일", "email"],
   attendanceType: ["참석 형태", "참석형태", "mode"],
   note: ["비고", "기타", "note"],
+  signatureDataUrl: [],
 };
 
 const getCell = (row: Record<string, unknown>, field: keyof ParticipantDraft) => {

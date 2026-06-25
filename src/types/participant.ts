@@ -19,6 +19,7 @@ export interface Participant {
   note?: string;
   createdAt: string;
   signed: boolean;
+  signatureDataUrl?: string;
 }
 
 export interface ParticipantDraft {
@@ -28,6 +29,7 @@ export interface ParticipantDraft {
   email: string;
   attendanceType: AttendanceType;
   note: string;
+  signatureDataUrl?: string;
 }
 
 export const registrationSourceLabels: Record<RegistrationSource, string> = {

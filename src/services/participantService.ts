@@ -74,7 +74,21 @@ export const participantService = {
     writeDatabase({
       ...state,
       participants: state.participants.map((participant) =>
-        participant.id === participantId ? { ...participant, signed } : participant,
+        participant.id === participantId
+          ? { ...participant, signed, signatureDataUrl: signed ? participant.signatureDataUrl : undefined }
+          : participant,
+      ),
+    });
+  },
+
+  async saveSignature(participantId: string, signatureDataUrl: string): Promise<void> {
+    const state = readDatabase();
+    writeDatabase({
+      ...state,
+      participants: state.participants.map((participant) =>
+        participant.id === participantId
+          ? { ...participant, signed: true, signatureDataUrl }
+          : participant,
       ),
     });
   },

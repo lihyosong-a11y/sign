@@ -41,6 +41,7 @@ type LegacyParticipant = {
   createdAt?: string;
   attendanceStatus?: Participant["attendanceStatus"] | "pending" | "attended" | "absent";
   signed?: boolean;
+  signatureDataUrl?: string;
   note?: string;
 };
 
@@ -78,7 +79,8 @@ const normalizeParticipant = (participant: LegacyParticipant): Participant => ({
   attendanceStatus: toAttendanceStatus(participant.attendanceStatus),
   note: participant.note || undefined,
   createdAt: participant.createdAt ?? participant.registeredAt ?? new Date().toISOString(),
-  signed: participant.signed ?? false,
+  signed: participant.signed ?? Boolean(participant.signatureDataUrl),
+  signatureDataUrl: participant.signatureDataUrl || undefined,
 });
 
 const normalizeState = (state: Partial<DatabaseState> & { events?: LegacyEvent[]; participants?: LegacyParticipant[] }) => ({

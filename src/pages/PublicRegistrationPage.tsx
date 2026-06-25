@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AlertCircle, CalendarDays, CheckCircle2, MapPin, UserPlus, Users } from "lucide-react";
+import { SignatureInput } from "../components/SignatureInput";
 import { eventService } from "../services/eventService";
 import { participantService } from "../services/participantService";
 import { ATTENDANCE_TYPES, type AttendanceType, type Event, type Participant, type ParticipantDraft } from "../types";
@@ -101,6 +102,7 @@ function PublicRegistrationPage() {
       nextErrors.push("연락처 형식을 확인해 주세요. 예: 010-1234-5678");
     }
     if (!privacyAgreed) nextErrors.push("개인정보 수집 및 이용에 동의해 주세요.");
+    if (!form.signatureDataUrl) nextErrors.push("서명을 입력하거나 서명 이미지를 업로드해 주세요.");
     return nextErrors;
   };
 
@@ -127,6 +129,7 @@ function PublicRegistrationPage() {
       email: form.email.trim(),
       attendanceType: form.attendanceType,
       note: form.note.trim(),
+      signatureDataUrl: form.signatureDataUrl,
     };
 
     if (
@@ -150,7 +153,8 @@ function PublicRegistrationPage() {
       registrationSource: "self",
       createdAt: new Date().toISOString(),
       attendanceStatus: "예정",
-      signed: false,
+      signed: Boolean(normalized.signatureDataUrl),
+      signatureDataUrl: normalized.signatureDataUrl,
     };
 
     await participantService.saveParticipant(participant);
@@ -289,6 +293,14 @@ function PublicRegistrationPage() {
                       onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
                     />
                   </label>
+
+                  <div className="rounded-lg border border-ink-200 bg-ink-50 p-4">
+                    <SignatureInput
+                      value={form.signatureDataUrl}
+                      onChange={(signatureDataUrl) => setForm((current) => ({ ...current, signatureDataUrl }))}
+                      compact
+                    />
+                  </div>
 
                   <label className="flex items-start gap-3 rounded-lg border border-ink-200 bg-ink-50 p-4 text-sm leading-6 text-ink-700">
                     <input

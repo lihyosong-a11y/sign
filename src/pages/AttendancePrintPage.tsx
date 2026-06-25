@@ -174,7 +174,15 @@ function AttendancePrintContent() {
                   <td className="border border-ink-700 px-2 py-3 text-center">
                     {participant.attendanceStatus === "예정" ? "" : attendanceStatusLabels[participant.attendanceStatus]}
                   </td>
-                  <td className="border border-ink-700 px-2 py-3 text-center">{participant.signed ? "서명 완료" : ""}</td>
+                  <td className="border border-ink-700 px-2 py-2 text-center">
+                    {participant.signatureDataUrl ? (
+                      <img className="mx-auto max-h-12 max-w-28 object-contain" src={participant.signatureDataUrl} alt={`${participant.name} 서명`} />
+                    ) : participant.signed ? (
+                      "서명 완료"
+                    ) : (
+                      ""
+                    )}
+                  </td>
                   <td className="border border-ink-700 px-2 py-3">{participant.note || ""}</td>
                 </tr>
               ))
