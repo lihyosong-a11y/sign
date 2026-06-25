@@ -1,0 +1,110 @@
+# 교사 행사 등록 및 출석부 관리
+
+학교 행사와 교사 연수의 참가 신청, 관리자 사전 등록, 참가자 관리, 엑셀 다운로드, 인쇄용 출석부 생성을 처리하는 React 웹앱입니다.
+
+## 로컬 실행 방법
+
+```bash
+npm install
+npm run dev
+```
+
+기본 관리자 비밀번호는 `teacher1234`입니다. 로컬에서 바꾸려면 `.env.local`을 만들고 아래처럼 설정합니다.
+
+```env
+VITE_ADMIN_PASSWORD=원하는_관리자_비밀번호
+VITE_SUPABASE_URL=https://njlwhmvgdqloelvmydra.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_iyTkqszXjnHEdZsPIcHhdA_aDEgcBr3
+```
+
+`.env.local`은 `.gitignore`에 포함되어 GitHub에 올라가지 않습니다.
+
+## 화면 주소
+
+- 관리자 화면: `/admin`
+- 공개 참가자 등록: `/event/{행사ID}`
+- 행사별 출석부 인쇄: `/event/{행사ID}/attendance`
+
+공개 등록 페이지는 행사 정보와 본인 등록 폼만 표시합니다. 참가자 전체 명단 조회, 엑셀 다운로드, 출석부 인쇄는 관리자 화면에서만 접근하도록 분리했습니다.
+
+## 데이터 저장 구조
+
+현재 실행 버전은 `localStorage` 기반 테스트 저장소를 사용합니다. 단, 컴포넌트가 `localStorage`를 직접 사용하지 않도록 저장 로직을 서비스 파일로 분리했습니다.
+
+- 행사 데이터: `src/services/eventService.ts`
+- 참가자 데이터: `src/services/participantService.ts`
+- 임시 관리자 인증: `src/services/authService.ts`
+- localStorage 내부 구현: `src/services/localDatabase.ts`
+- Supabase 클라이언트 준비: `src/services/supabaseClient.ts`
+
+추후 Supabase로 전환할 때는 주로 `eventService.ts`, `participantService.ts`, `authService.ts`를 Supabase 쿼리와 Supabase Auth 호출로 교체하면 됩니다.
+
+## 타입 구조
+
+행사와 참가자 타입은 `src/types/` 폴더에 분리되어 있습니다.
+
+- `src/types/event.ts`
+- `src/types/participant.ts`
+- `src/types/index.ts`
+
+주요 값:
+
+- `registrationSource`: `admin` 또는 `self`
+- `attendanceStatus`: `예정`, `참석`, `미참석`
+
+## GitHub에 올리는 방법
+
+```bash
+git init
+git add .
+git commit -m "Initial teacher event attendance app"
+git branch -M main
+git remote add origin <GitHub 저장소 주소>
+git push -u origin main
+```
+
+`node_modules`, `dist`, `.env.local`은 GitHub에 올리지 않습니다.
+
+## Vercel 배포
+
+1. GitHub 저장소를 Vercel에 Import합니다.
+2. Framework Preset은 Vite로 선택합니다.
+3. Build Command는 `npm run build`를 사용합니다.
+4. Output Directory는 `dist`를 사용합니다.
+5. Vercel 프로젝트의 Settings > Environment Variables에 아래 값을 등록합니다.
+
+```env
+VITE_ADMIN_PASSWORD=원하는_관리자_비밀번호
+VITE_SUPABASE_URL=https://njlwhmvgdqloelvmydra.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_iyTkqszXjnHEdZsPIcHhdA_aDEgcBr3
+```
+
+React Router 새로고침 문제가 생기지 않도록 `vercel.json`에 모든 경로를 `index.html`로 rewrite하는 설정을 포함했습니다.
+
+## Supabase 연결 시 주의
+
+프런트엔드에는 Supabase publishable key만 넣습니다. `service_role key`, secret key, 데이터베이스 비밀번호는 프런트엔드 코드, `.env.example`, GitHub, Vercel의 공개 환경 변수에 절대 넣지 마세요.
+
+실제 운영 전에는 다음 설정이 필요합니다.
+
+- Supabase 테이블 생성: `events`, `participants`
+- Supabase Auth 기반 관리자 로그인
+- Row Level Security 정책
+- 공개 등록 insert 권한과 관리자 조회/수정/삭제 권한 분리
+- HTTPS 환경에서 운영
+- 개인정보 수집 및 이용 안내문, 보관 기간, 삭제 정책 작성
+
+## 주요 기능
+
+- 행사 생성, 수정, 삭제
+- 공개 등록 링크 생성
+- 관리자 사전 참가자 등록
+- Excel 또는 CSV 일괄 업로드와 미리보기
+- 중복 참가자 확인
+- 참가자 검색, 필터, 수정, 삭제
+- 참석/미참석 처리와 서명 여부 관리
+- 전체 참가자 및 대면 참석자 엑셀 다운로드
+- 공개 참가자 등록 폼
+- A4 인쇄용 출석부와 `@media print` 전용 CSS
+- 연락처 뒤 4자리 기본 표시, 전체 연락처 표시 옵션
+- 시연용 데이터 생성 버튼
