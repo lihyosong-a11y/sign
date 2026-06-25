@@ -33,6 +33,7 @@ import {
   ATTENDANCE_TYPES,
   EVENT_CATEGORIES,
   attendanceStatusLabels,
+  defaultPublicRegistrationSettings,
   registrationSourceLabels,
   type AttendanceType,
   type AttendanceStatus,
@@ -40,6 +41,8 @@ import {
   type Event,
   type Participant,
   type ParticipantDraft,
+  type PublicRegistrationMode,
+  type PublicRegistrationSettings,
   type RegistrationSource,
 } from "../types";
 import {
@@ -69,6 +72,7 @@ type EventFormState = {
   capacity: string;
   isPublicRegistrationOpen: boolean;
   registrationDeadline: string;
+  publicRegistrationSettings: PublicRegistrationSettings;
 };
 
 type ParticipantFilter = {
@@ -94,6 +98,7 @@ const emptyEventForm: EventFormState = {
   capacity: "",
   isPublicRegistrationOpen: true,
   registrationDeadline: "",
+  publicRegistrationSettings: { ...defaultPublicRegistrationSettings },
 };
 
 const emptyParticipantForm: ParticipantDraft = {
@@ -122,6 +127,12 @@ const statusBadgeClass: Record<AttendanceStatus, string> = {
   예정: "bg-amber-50 text-amber-700",
   참석: "bg-school-50 text-school-700",
   미참석: "bg-red-50 text-red-700",
+};
+
+const registrationModeLabels: Record<PublicRegistrationMode, string> = {
+  new: "새 참가자 직접 등록",
+  pre_registered_signature: "사전 명단 선택 후 서명만",
+  both: "둘 다 허용",
 };
 
 const getPublicStatus = (event: Event) => {
@@ -285,6 +296,23 @@ function AdminDashboard() {
 
   const faceToFaceCount = selectedParticipants.filter((participant) => participant.attendanceType === "대면").length;
 
+  const updatePublicRegistrationSettings = (patch: Partial<PublicRegistrationSettings>) => {
+    setEventForm((form) => {
+      const nextSettings = {
+        ...form.publicRegistrationSettings,
+        ...patch,
+      };
+
+      if (!nextSettings.collectPhone) nextSettings.requirePhone = false;
+      if (!nextSettings.collectEmail) nextSettings.requireEmail = false;
+
+      return {
+        ...form,
+        publicRegistrationSettings: nextSettings,
+      };
+    });
+  };
+
   const handleEventSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setEventError("");
@@ -301,6 +329,11 @@ function AdminDashboard() {
 
     const now = new Date().toISOString();
     const previous = editingEventId ? events.find((item) => item.id === editingEventId) : undefined;
+    const publicRegistrationSettings: PublicRegistrationSettings = {
+      ...eventForm.publicRegistrationSettings,
+      requirePhone: eventForm.publicRegistrationSettings.collectPhone ? eventForm.publicRegistrationSettings.requirePhone : false,
+      requireEmail: eventForm.publicRegistrationSettings.collectEmail ? eventForm.publicRegistrationSettings.requireEmail : false,
+    };
     const savedEvent: Event = {
       id: previous?.id ?? createId("event"),
       title: eventForm.title.trim(),
@@ -312,6 +345,7 @@ function AdminDashboard() {
       capacity: eventForm.capacity ? Number(eventForm.capacity) : undefined,
       isPublicRegistrationOpen: eventForm.isPublicRegistrationOpen,
       registrationDeadline: eventForm.registrationDeadline || undefined,
+      publicRegistrationSettings,
       createdAt: previous?.createdAt ?? now,
       updatedAt: now,
     };
@@ -339,6 +373,10 @@ function AdminDashboard() {
       capacity: event.capacity ? String(event.capacity) : "",
       isPublicRegistrationOpen: event.isPublicRegistrationOpen,
       registrationDeadline: event.registrationDeadline ?? "",
+      publicRegistrationSettings: {
+        ...defaultPublicRegistrationSettings,
+        ...event.publicRegistrationSettings,
+      },
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -751,6 +789,92 @@ function AdminDashboard() {
                 value={eventForm.registrationDeadline}
                 onChange={(event) => setEventForm((form) => ({ ...form, registrationDeadline: event.target.value }))}
               />
+            </div>
+            <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 lg:col-span-12">
+              <div className="grid gap-4 lg:grid-cols-[minmax(220px,320px)_1fr]">
+                <label>
+                  <span className="field-label">공개 등록 방식</span>
+                  <select
+                    className="field-input bg-white"
+                    value={eventForm.publicRegistrationSettings.mode}
+                    onChange={(event) =>
+                      updatePublicRegistrationSettings({
+                        mode: event.target.value as PublicRegistrationMode,
+                      })
+                    }
+                  >
+                    {Object.entries(registrationModeLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <p className="field-label">새 참가자 등록 시 받을 항목</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
+                      <input
+                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
+                        type="checkbox"
+                        checked={eventForm.publicRegistrationSettings.collectPhone}
+                        onChange={(event) => updatePublicRegistrationSettings({ collectPhone: event.target.checked })}
+                      />
+                      연락처 받기
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
+                      <input
+                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600 disabled:opacity-50"
+                        type="checkbox"
+                        checked={eventForm.publicRegistrationSettings.requirePhone}
+                        disabled={!eventForm.publicRegistrationSettings.collectPhone}
+                        onChange={(event) => updatePublicRegistrationSettings({ requirePhone: event.target.checked })}
+                      />
+                      연락처 필수
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
+                      <input
+                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
+                        type="checkbox"
+                        checked={eventForm.publicRegistrationSettings.collectEmail}
+                        onChange={(event) => updatePublicRegistrationSettings({ collectEmail: event.target.checked })}
+                      />
+                      이메일 받기
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
+                      <input
+                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600 disabled:opacity-50"
+                        type="checkbox"
+                        checked={eventForm.publicRegistrationSettings.requireEmail}
+                        disabled={!eventForm.publicRegistrationSettings.collectEmail}
+                        onChange={(event) => updatePublicRegistrationSettings({ requireEmail: event.target.checked })}
+                      />
+                      이메일 필수
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
+                      <input
+                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
+                        type="checkbox"
+                        checked={eventForm.publicRegistrationSettings.collectAttendanceType}
+                        onChange={(event) => updatePublicRegistrationSettings({ collectAttendanceType: event.target.checked })}
+                      />
+                      참석 형태 받기
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
+                      <input
+                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
+                        type="checkbox"
+                        checked={eventForm.publicRegistrationSettings.collectNote}
+                        onChange={(event) => updatePublicRegistrationSettings({ collectNote: event.target.checked })}
+                      />
+                      요청 사항 받기
+                    </label>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-ink-600">
+                    사전 명단 서명 방식은 관리자가 등록하거나 업로드한 참가자가 공개 링크에서 본인을 선택하고 서명만 남기는 흐름입니다.
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="lg:col-span-8">
               <label className="field-label" htmlFor="event-description">

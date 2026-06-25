@@ -1,4 +1,4 @@
-import type { DatabaseState, Event, Participant } from "../types";
+import { defaultPublicRegistrationSettings, type DatabaseState, type Event, type Participant } from "../types";
 import { createId, toDateTimeInputValue } from "../utils/format";
 
 const futureDate = (days: number, hour: number, minute = 0) => {
@@ -43,6 +43,7 @@ export const buildSampleData = (): DatabaseState => {
     capacity: 30,
     isPublicRegistrationOpen: true,
     registrationDeadline: futureDate(5, 17),
+    publicRegistrationSettings: defaultPublicRegistrationSettings,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -58,6 +59,10 @@ export const buildSampleData = (): DatabaseState => {
     capacity: 24,
     isPublicRegistrationOpen: true,
     registrationDeadline: futureDate(12, 12),
+    publicRegistrationSettings: {
+      ...defaultPublicRegistrationSettings,
+      mode: "pre_registered_signature",
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -73,6 +78,12 @@ export const buildSampleData = (): DatabaseState => {
     capacity: 50,
     isPublicRegistrationOpen: true,
     registrationDeadline: futureDate(19, 18),
+    publicRegistrationSettings: {
+      ...defaultPublicRegistrationSettings,
+      mode: "both",
+      requirePhone: false,
+      requireEmail: false,
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

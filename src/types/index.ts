@@ -1,5 +1,5 @@
-export type { Event, EventCategory } from "./event";
-export { EVENT_CATEGORIES } from "./event";
+export type { Event, EventCategory, PublicRegistrationMode, PublicRegistrationSettings } from "./event";
+export { EVENT_CATEGORIES, PUBLIC_REGISTRATION_MODES, defaultPublicRegistrationSettings } from "./event";
 export type {
   AttendanceStatus,
   AttendanceType,

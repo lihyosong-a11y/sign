@@ -1,4 +1,4 @@
-import type { DatabaseState, Event, Participant } from "../types";
+import { defaultPublicRegistrationSettings, type DatabaseState, type Event, type Participant } from "../types";
 
 const STORAGE_KEY = "teacher-event-attendance:v2";
 const LEGACY_STORAGE_KEY = "teacher-event-attendance:v1";
@@ -22,6 +22,7 @@ type LegacyEvent = {
   publicRegistrationEnabled?: boolean;
   isPublicRegistrationOpen?: boolean;
   registrationDeadline?: string;
+  publicRegistrationSettings?: Partial<Event["publicRegistrationSettings"]>;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -62,6 +63,18 @@ const normalizeEvent = (event: LegacyEvent): Event => ({
   capacity: event.capacity,
   isPublicRegistrationOpen: event.isPublicRegistrationOpen ?? event.publicRegistrationEnabled ?? true,
   registrationDeadline: event.registrationDeadline || undefined,
+  publicRegistrationSettings: {
+    ...defaultPublicRegistrationSettings,
+    ...event.publicRegistrationSettings,
+    requirePhone:
+      event.publicRegistrationSettings?.collectPhone === false
+        ? false
+        : (event.publicRegistrationSettings?.requirePhone ?? defaultPublicRegistrationSettings.requirePhone),
+    requireEmail:
+      event.publicRegistrationSettings?.collectEmail === false
+        ? false
+        : (event.publicRegistrationSettings?.requireEmail ?? defaultPublicRegistrationSettings.requireEmail),
+  },
   createdAt: event.createdAt ?? new Date().toISOString(),
   updatedAt: event.updatedAt,
 });

@@ -1,6 +1,8 @@
 import type { AttendanceStatus, Participant } from "../types";
-import { duplicateKey } from "../utils/format";
+import { duplicateKey, normalizeName } from "../utils/format";
 import { readDatabase, sortParticipants, writeDatabase } from "./localDatabase";
+
+export type PublicSignatureCandidate = Pick<Participant, "id" | "name" | "organization" | "attendanceType" | "signed">;
 
 export const participantService = {
   async getAllParticipantsForAdmin(): Promise<Participant[]> {
@@ -16,6 +18,20 @@ export const participantService = {
     return { count };
   },
 
+  async getPublicSignatureCandidates(eventId: string): Promise<PublicSignatureCandidate[]> {
+    return sortParticipants(
+      readDatabase().participants.filter(
+        (participant) => participant.eventId === eventId && participant.registrationSource === "admin",
+      ),
+    ).map(({ id, name, organization, attendanceType, signed }) => ({
+      id,
+      name,
+      organization,
+      attendanceType,
+      signed,
+    }));
+  },
+
   async hasDuplicateInEvent(eventId: string, name: string, phone: string, ignoreParticipantId?: string): Promise<boolean> {
     const target = duplicateKey(name, phone);
     return readDatabase().participants.some(
@@ -23,6 +39,16 @@ export const participantService = {
         participant.eventId === eventId &&
         participant.id !== ignoreParticipantId &&
         duplicateKey(participant.name, participant.phone) === target,
+    );
+  },
+
+  async hasNameInEvent(eventId: string, name: string, ignoreParticipantId?: string): Promise<boolean> {
+    const target = normalizeName(name);
+    return readDatabase().participants.some(
+      (participant) =>
+        participant.eventId === eventId &&
+        participant.id !== ignoreParticipantId &&
+        normalizeName(participant.name) === target,
     );
   },
 
@@ -91,5 +117,25 @@ export const participantService = {
           : participant,
       ),
     });
+  },
+
+  async confirmPublicSignature(participantId: string, signatureDataUrl: string): Promise<Participant | undefined> {
+    const state = readDatabase();
+    let savedParticipant: Participant | undefined;
+
+    const participants = state.participants.map((participant) => {
+      if (participant.id !== participantId) return participant;
+
+      savedParticipant = {
+        ...participant,
+        signed: true,
+        signatureDataUrl,
+        attendanceStatus: "참석",
+      };
+      return savedParticipant;
+    });
+
+    writeDatabase({ ...state, participants });
+    return savedParticipant;
   },
 };
