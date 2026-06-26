@@ -252,6 +252,30 @@ try {
   if (!adminOk || !firstEventId) throw new Error("Admin screen or sample data check failed");
   await screenshot(cdp, "admin.png");
 
+  await evaluate(
+    cdp,
+    `[...document.querySelectorAll("button")].find((button) => button.textContent.includes("QR 코드"))?.click()`,
+  );
+  await sleep(500);
+  const qrOk = await evaluate(
+    cdp,
+    `(() => {
+      const canvas = document.querySelector("#event-qr-canvas");
+      return Boolean(canvas) &&
+        canvas.width > 0 &&
+        canvas.height > 0 &&
+        canvas.toDataURL("image/png").startsWith("data:image/png") &&
+        document.body.innerText.includes("/event/${firstEventId}");
+    })()`,
+  );
+  if (!qrOk) throw new Error("QR code modal check failed");
+  await screenshot(cdp, "qr-modal.png");
+  await evaluate(
+    cdp,
+    `[...document.querySelectorAll("button")].find((button) => button.textContent.includes("닫기"))?.click()`,
+  );
+  await sleep(300);
+
   await navigate(cdp, `${appUrl}/event/${firstEventId}`);
   const publicOk = await evaluate(
     cdp,

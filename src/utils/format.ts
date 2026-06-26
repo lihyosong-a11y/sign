@@ -105,10 +105,16 @@ export const hasDuplicateParticipant = (
   );
 };
 
+const getAppBaseUrl = () => {
+  const configuredUrl = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
+  const baseUrl = configuredUrl || window.location.origin;
+  return baseUrl.replace(/\/+$/, "");
+};
+
 export const getPublicEventUrl = (eventId: string) => {
-  return `${window.location.origin}/event/${eventId}`;
+  return `${getAppBaseUrl()}/event/${eventId}`;
 };
 
 export const getAttendanceUrl = (eventId: string) => {
-  return `${window.location.origin}/event/${eventId}/attendance`;
+  return `${getAppBaseUrl()}/event/${eventId}/attendance`;
 };

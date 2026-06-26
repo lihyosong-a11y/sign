@@ -8,6 +8,7 @@ import {
   Copy,
   Download,
   Edit3,
+  ExternalLink,
   FileSpreadsheet,
   Link as LinkIcon,
   Lock,
@@ -697,7 +698,9 @@ function AdminDashboard() {
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
     link.download = `${qrEvent.title.replace(/[\\/:*?"<>|]/g, "_")}_등록_QR.png`;
+    document.body.appendChild(link);
     link.click();
+    link.remove();
   };
 
   return (
@@ -1655,6 +1658,10 @@ function AdminDashboard() {
                 <Copy size={18} aria-hidden="true" />
                 링크 복사
               </button>
+              <a className="btn-secondary" href={getPublicEventUrl(qrEvent.id)} target="_blank" rel="noreferrer">
+                <ExternalLink size={18} aria-hidden="true" />
+                등록 페이지 열기
+              </a>
               <button className="btn-primary" type="button" onClick={handleDownloadQr}>
                 <Download size={18} aria-hidden="true" />
                 QR 이미지 저장

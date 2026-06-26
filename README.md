@@ -15,6 +15,7 @@ npm run dev
 
 ```env
 VITE_ADMIN_PASSWORD=원하는_관리자_비밀번호
+VITE_PUBLIC_APP_URL=https://your-vercel-domain.vercel.app
 VITE_SUPABASE_URL=https://njlwhmvgdqloelvmydra.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_iyTkqszXjnHEdZsPIcHhdA_aDEgcBr3
 ```
@@ -28,6 +29,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_iyTkqszXjnHEdZsPIcHhdA_aDEgcBr3
 - 행사별 출석부 인쇄: `/event/{행사ID}/attendance`
 
 공개 등록 페이지는 행사 정보와 본인 등록 폼만 표시합니다. 참가자 전체 명단 조회, 엑셀 다운로드, 출석부 인쇄는 행사별 관리 비밀번호를 확인한 뒤 접근하도록 분리했습니다.
+
+QR 코드는 `VITE_PUBLIC_APP_URL`이 있으면 해당 주소를 기준으로 생성합니다. Vercel 배포 후에는 이 값을 실제 배포 주소로 등록하세요. 로컬 개발 주소인 `localhost`나 `127.0.0.1`로 만든 QR은 휴대폰에서 접속되지 않을 수 있습니다.
 
 ## 데이터 저장 구조
 
@@ -77,6 +80,7 @@ git push -u origin main
 
 ```env
 VITE_ADMIN_PASSWORD=원하는_관리자_비밀번호
+VITE_PUBLIC_APP_URL=https://your-vercel-domain.vercel.app
 VITE_SUPABASE_URL=https://njlwhmvgdqloelvmydra.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_iyTkqszXjnHEdZsPIcHhdA_aDEgcBr3
 ```
