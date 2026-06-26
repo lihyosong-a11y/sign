@@ -13,6 +13,11 @@ export const participantService = {
     return sortParticipants(readDatabase().participants.filter((participant) => participant.eventId === eventId));
   },
 
+  async getParticipantsByEventIdsForAdmin(eventIds: string[]): Promise<Participant[]> {
+    const eventIdSet = new Set(eventIds);
+    return sortParticipants(readDatabase().participants.filter((participant) => eventIdSet.has(participant.eventId)));
+  },
+
   async getPublicRegistrationSummary(eventId: string): Promise<{ count: number }> {
     const count = readDatabase().participants.filter((participant) => participant.eventId === eventId).length;
     return { count };

@@ -38,7 +38,7 @@ export function EventPasswordGate({
       .then((nextEvent) => {
         if (!active) return;
         setEvent(nextEvent);
-        setUnlocked(authService.isEventAuthenticated(eventId) || authService.isAdminAuthenticated());
+        setUnlocked(Boolean(nextEvent && (authService.isEventAuthenticated(eventId) || authService.canManageEvent(nextEvent))));
       })
       .finally(() => {
         if (active) setLoading(false);

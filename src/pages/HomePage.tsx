@@ -28,7 +28,7 @@ function HomePage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-ink-900">관리자 로그인</h2>
-                <p className="mt-1 text-sm leading-6 text-ink-600">행사를 만들고 참가자 명단, QR 코드, 엑셀 다운로드, 인쇄용 등록부를 관리합니다.</p>
+                <p className="mt-1 text-sm leading-6 text-ink-600">담당 교사 계정을 발급하고 학교 전체 행사와 등록부를 관리합니다.</p>
               </div>
             </div>
           </Link>
@@ -40,7 +40,7 @@ function HomePage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-ink-900">사용자 로그인</h2>
-                <p className="mt-1 text-sm leading-6 text-ink-600">공개된 행사를 찾아 참가 신청을 하거나 전달받은 행사 링크에서 서명을 진행합니다.</p>
+                <p className="mt-1 text-sm leading-6 text-ink-600">학교 관리자가 발급한 계정으로 로그인해 본인의 행사 등록부를 만들고 수합합니다.</p>
               </div>
             </div>
           </Link>
@@ -50,7 +50,7 @@ function HomePage() {
           <div className="flex items-start gap-3">
             <QrCode className="mt-0.5 shrink-0 text-school-700" size={22} aria-hidden="true" />
             <p className="text-sm leading-6 text-ink-700">
-              QR 코드를 받은 경우 스캔하면 해당 행사 등록 화면으로 바로 이동합니다. 사용자 화면에서는 공개 등록 중인 행사만 확인할 수 있습니다.
+              참가자는 QR 코드를 스캔하면 해당 행사 등록 화면으로 바로 이동합니다. 사용자 로그인은 행사 등록부를 수합하는 담당 교사용입니다.
             </p>
           </div>
         </section>

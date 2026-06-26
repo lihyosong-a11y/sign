@@ -1,4 +1,4 @@
-import { defaultPublicRegistrationSettings, type DatabaseState, type Event, type Participant } from "../types";
+import { defaultPublicRegistrationSettings, type DatabaseState, type Event, type Participant, type TeacherUser } from "../types";
 import { authService } from "../services/authService";
 import { createId, toDateTimeInputValue } from "../utils/format";
 
@@ -34,6 +34,37 @@ const makeParticipant = (
 
 export const buildSampleData = (): DatabaseState => {
   const samplePasswordHash = authService.hashPassword("teacher1234");
+  const now = new Date().toISOString();
+  const aiTeacher: TeacherUser = {
+    id: createId("teacher"),
+    username: "kim",
+    name: "김지윤",
+    organization: "교육연구부",
+    passwordHash: samplePasswordHash,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const scienceTeacher: TeacherUser = {
+    id: createId("teacher"),
+    username: "park",
+    name: "박민석",
+    organization: "과학부",
+    passwordHash: samplePasswordHash,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const digitalTeacher: TeacherUser = {
+    id: createId("teacher"),
+    username: "lee",
+    name: "이서연",
+    organization: "정보부",
+    passwordHash: samplePasswordHash,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  };
   const aiEvent: Event = {
     id: createId("event"),
     title: "AI 활용 수업 연수",
@@ -47,8 +78,9 @@ export const buildSampleData = (): DatabaseState => {
     registrationDeadline: futureDate(5, 17),
     publicRegistrationSettings: defaultPublicRegistrationSettings,
     adminPasswordHash: samplePasswordHash,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    ownerUserId: aiTeacher.id,
+    createdAt: now,
+    updatedAt: now,
   };
 
   const scienceEvent: Event = {
@@ -67,8 +99,9 @@ export const buildSampleData = (): DatabaseState => {
       mode: "pre_registered_signature",
     },
     adminPasswordHash: samplePasswordHash,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    ownerUserId: scienceTeacher.id,
+    createdAt: now,
+    updatedAt: now,
   };
 
   const digitalEvent: Event = {
@@ -91,11 +124,13 @@ export const buildSampleData = (): DatabaseState => {
       requireEmail: true,
     },
     adminPasswordHash: samplePasswordHash,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    ownerUserId: digitalTeacher.id,
+    createdAt: now,
+    updatedAt: now,
   };
 
   return {
+    users: [aiTeacher, scienceTeacher, digitalTeacher],
     events: [aiEvent, scienceEvent, digitalEvent],
     participants: [
       makeParticipant(aiEvent.id, "강민준", "한빛초등학교", "010-2354-1188", "admin", "대면", "교내 전달 연수 예정"),

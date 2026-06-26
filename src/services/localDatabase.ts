@@ -1,4 +1,4 @@
-import { defaultPublicRegistrationSettings, type DatabaseState, type Event, type Participant } from "../types";
+import { defaultPublicRegistrationSettings, type DatabaseState, type Event, type Participant, type TeacherUser } from "../types";
 
 const STORAGE_KEY = "teacher-event-attendance:v2";
 const LEGACY_STORAGE_KEY = "teacher-event-attendance:v1";
@@ -6,6 +6,7 @@ const LEGACY_STORAGE_KEY = "teacher-event-attendance:v1";
 const emptyState: DatabaseState = {
   events: [],
   participants: [],
+  users: [],
 };
 
 type LegacyEvent = {
@@ -24,6 +25,7 @@ type LegacyEvent = {
   registrationDeadline?: string;
   publicRegistrationSettings?: Partial<Event["publicRegistrationSettings"]>;
   adminPasswordHash?: string;
+  ownerUserId?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -45,6 +47,17 @@ type LegacyParticipant = {
   signed?: boolean;
   signatureDataUrl?: string;
   note?: string;
+};
+
+type LegacyUser = {
+  id: string;
+  username: string;
+  name: string;
+  organization?: string;
+  passwordHash: string;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 const toAttendanceStatus = (value: LegacyParticipant["attendanceStatus"]): Participant["attendanceStatus"] => {
@@ -77,6 +90,7 @@ const normalizeEvent = (event: LegacyEvent): Event => ({
         : (event.publicRegistrationSettings?.requireEmail ?? defaultPublicRegistrationSettings.requireEmail),
   },
   adminPasswordHash: event.adminPasswordHash,
+  ownerUserId: event.ownerUserId,
   createdAt: event.createdAt ?? new Date().toISOString(),
   updatedAt: event.updatedAt,
 });
@@ -98,9 +112,23 @@ const normalizeParticipant = (participant: LegacyParticipant): Participant => ({
   signatureDataUrl: participant.signatureDataUrl || undefined,
 });
 
-const normalizeState = (state: Partial<DatabaseState> & { events?: LegacyEvent[]; participants?: LegacyParticipant[] }) => ({
+const normalizeUser = (user: LegacyUser): TeacherUser => ({
+  id: user.id,
+  username: user.username.trim().toLowerCase(),
+  name: user.name,
+  organization: user.organization || undefined,
+  passwordHash: user.passwordHash,
+  active: user.active ?? true,
+  createdAt: user.createdAt ?? new Date().toISOString(),
+  updatedAt: user.updatedAt,
+});
+
+const normalizeState = (
+  state: Partial<DatabaseState> & { events?: LegacyEvent[]; participants?: LegacyParticipant[]; users?: LegacyUser[] },
+) => ({
   events: Array.isArray(state.events) ? state.events.map(normalizeEvent) : [],
   participants: Array.isArray(state.participants) ? state.participants.map(normalizeParticipant) : [],
+  users: Array.isArray(state.users) ? state.users.map(normalizeUser) : [],
 });
 
 export const readDatabase = (): DatabaseState => {

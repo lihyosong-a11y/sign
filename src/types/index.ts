@@ -1,5 +1,6 @@
 export type { Event, EventCategory, PublicRegistrationMode, PublicRegistrationSettings } from "./event";
 export { EVENT_CATEGORIES, PUBLIC_REGISTRATION_MODES, defaultPublicRegistrationSettings } from "./event";
+export type { TeacherUser } from "./user";
 export type {
   AttendanceStatus,
   AttendanceType,
@@ -22,4 +23,5 @@ export type AttendanceMode = import("./participant").AttendanceType;
 export interface DatabaseState {
   events: import("./event").Event[];
   participants: import("./participant").Participant[];
+  users: import("./user").TeacherUser[];
 }

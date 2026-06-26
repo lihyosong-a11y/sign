@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Printer } from "lucide-react";
 import { EventPasswordGate } from "../components/EventPasswordGate";
+import { authService } from "../services/authService";
 import { eventService } from "../services/eventService";
 import { participantService } from "../services/participantService";
 import { attendanceStatusLabels, type Event, type Participant } from "../types";
@@ -80,6 +81,10 @@ function AttendancePrintContent() {
 
   const faceToFaceParticipants = participants.filter((participant) => participant.attendanceType === "대면");
   const printParticipants = printRange === "onsite" ? faceToFaceParticipants : participants;
+  const isTeacherOwner =
+    Boolean(event.ownerUserId) && authService.getCurrentTeacherUserId() === event.ownerUserId && !authService.isAdminAuthenticated();
+  const backPath = isTeacherOwner ? "/user" : "/admin";
+  const backLabel = isTeacherOwner ? "담당자 화면" : "관리자 화면";
   const formatPhoneForPrint = (phone: string) => {
     if (!phone.trim()) return "-";
     return showFullPhone ? phone : maskPhone(phone);
@@ -94,9 +99,9 @@ function AttendancePrintContent() {
           <p className="mt-1 text-sm text-ink-500">브라우저 인쇄 창에서 PDF로 저장할 수 있습니다.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link className="btn-secondary" to="/admin">
+          <Link className="btn-secondary" to={backPath}>
             <ArrowLeft size={18} aria-hidden="true" />
-            관리자 화면
+            {backLabel}
           </Link>
           <div className="inline-flex rounded-md border border-ink-200 bg-white p-1">
             <button

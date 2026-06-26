@@ -37,6 +37,7 @@ export interface Event {
   registrationDeadline?: string;
   publicRegistrationSettings: PublicRegistrationSettings;
   adminPasswordHash?: string;
+  ownerUserId?: string;
   createdAt: string;
   updatedAt?: string;
 }

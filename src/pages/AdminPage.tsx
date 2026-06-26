@@ -30,6 +30,7 @@ import { buildSampleData } from "../data/sampleData";
 import { authService } from "../services/authService";
 import { eventService } from "../services/eventService";
 import { participantService } from "../services/participantService";
+import { userService } from "../services/userService";
 import {
   ATTENDANCE_TYPES,
   EVENT_CATEGORIES,
@@ -45,6 +46,7 @@ import {
   type PublicRegistrationMode,
   type PublicRegistrationSettings,
   type RegistrationSource,
+  type TeacherUser,
 } from "../types";
 import {
   createId,
@@ -91,6 +93,21 @@ type ImportPreviewRow = ImportParticipantRow & {
   duplicateInFile: boolean;
 };
 
+type TeacherFormState = {
+  username: string;
+  name: string;
+  organization: string;
+  password: string;
+  passwordConfirm: string;
+  active: boolean;
+};
+
+type AdminDashboardProps = {
+  mode?: "admin" | "teacher";
+  teacherUser?: TeacherUser;
+  onLogout?: () => void;
+};
+
 const emptyEventForm: EventFormState = {
   title: "",
   category: "연수",
@@ -113,6 +130,15 @@ const emptyParticipantForm: ParticipantDraft = {
   email: "",
   attendanceType: "대면",
   note: "",
+};
+
+const emptyTeacherForm: TeacherFormState = {
+  username: "",
+  name: "",
+  organization: "",
+  password: "",
+  passwordConfirm: "",
+  active: true,
 };
 
 const emptyFilters: ParticipantFilter = {
@@ -178,10 +204,12 @@ const validateParticipantDraft = (draft: ParticipantDraft) => {
 };
 
 function AdminPage() {
-  return <AdminDashboard />;
+  return <AdminDashboard mode="admin" />;
 }
 
-function AdminDashboard() {
+export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminDashboardProps) {
+  const isTeacherMode = mode === "teacher";
+  const isAdminMode = mode === "admin";
   const [revision, setRevision] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -204,6 +232,10 @@ function AdminDashboard() {
   const [selectedEventPasswordError, setSelectedEventPasswordError] = useState("");
   const [events, setEvents] = useState<Event[]>([]);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
+  const [teacherUsers, setTeacherUsers] = useState<TeacherUser[]>([]);
+  const [teacherForm, setTeacherForm] = useState<TeacherFormState>(emptyTeacherForm);
+  const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
+  const [teacherNotice, setTeacherNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [storeError, setStoreError] = useState("");
 
@@ -213,11 +245,26 @@ function AdminDashboard() {
     let active = true;
 
     setLoading(true);
-    Promise.all([eventService.getEvents(), participantService.getAllParticipantsForAdmin()])
-      .then(([nextEvents, nextParticipants]) => {
+    const loadDashboard = async () => {
+      const nextEvents =
+        isTeacherMode && teacherUser
+          ? await eventService.getEventsByOwner(teacherUser.id)
+          : await eventService.getEvents();
+      const nextParticipants =
+        isTeacherMode
+          ? await participantService.getParticipantsByEventIdsForAdmin(nextEvents.map((event) => event.id))
+          : await participantService.getAllParticipantsForAdmin();
+      const nextTeacherUsers = isAdminMode ? await userService.getTeacherUsers() : [];
+
+      return { nextEvents, nextParticipants, nextTeacherUsers };
+    };
+
+    loadDashboard()
+      .then(({ nextEvents, nextParticipants, nextTeacherUsers }) => {
         if (!active) return;
         setEvents(nextEvents);
         setAllParticipants(nextParticipants);
+        setTeacherUsers(nextTeacherUsers);
         setStoreError("");
       })
       .catch((error: unknown) => {
@@ -231,7 +278,7 @@ function AdminDashboard() {
     return () => {
       active = false;
     };
-  }, [revision]);
+  }, [isAdminMode, isTeacherMode, revision, teacherUser]);
 
   useEffect(() => {
     if (!selectedEventId && events.length > 0) {
@@ -256,7 +303,9 @@ function AdminDashboard() {
   }, [selectedEventId]);
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
-  const selectedEventUnlocked = selectedEvent ? unlockedEventIds.has(selectedEvent.id) : false;
+  const canManageDashboardEvent = (event: Event) =>
+    isAdminMode || (isTeacherMode && event.ownerUserId === teacherUser?.id) || unlockedEventIds.has(event.id);
+  const selectedEventUnlocked = selectedEvent ? canManageDashboardEvent(selectedEvent) : false;
   const selectedParticipants = useMemo(
     () =>
       selectedEvent && selectedEventUnlocked
@@ -381,13 +430,14 @@ function AdminDashboard() {
       category: eventForm.category,
       eventDate: eventForm.eventDate,
       location: eventForm.location.trim(),
-      managerName: eventForm.managerName.trim(),
+      managerName: eventForm.managerName.trim() || teacherUser?.name || "",
       description: eventForm.description.trim(),
       capacity: eventForm.capacity ? Number(eventForm.capacity) : undefined,
       isPublicRegistrationOpen: eventForm.isPublicRegistrationOpen,
       registrationDeadline: eventForm.registrationDeadline || undefined,
       publicRegistrationSettings,
       adminPasswordHash: nextAdminPassword ? authService.hashPassword(nextAdminPassword) : previous?.adminPasswordHash,
+      ownerUserId: previous?.ownerUserId ?? teacherUser?.id,
       createdAt: previous?.createdAt ?? now,
       updatedAt: now,
     };
@@ -406,7 +456,7 @@ function AdminDashboard() {
   };
 
   const handleEditEvent = (event: Event) => {
-    if (!unlockedEventIds.has(event.id)) {
+    if (!canManageDashboardEvent(event)) {
       setSelectedEventId(event.id);
       setSelectedEventPasswordError("행사를 수정하려면 먼저 관리 비밀번호를 입력해 주세요.");
       return;
@@ -434,7 +484,7 @@ function AdminDashboard() {
   };
 
   const handleDeleteEvent = async (event: Event) => {
-    if (!unlockedEventIds.has(event.id)) {
+    if (!canManageDashboardEvent(event)) {
       setSelectedEventId(event.id);
       setSelectedEventPasswordError("행사를 삭제하려면 먼저 관리 비밀번호를 입력해 주세요.");
       return;
@@ -465,6 +515,118 @@ function AdminDashboard() {
       refresh();
     } catch (error) {
       setStoreError(error instanceof Error ? error.message : "시연용 데이터를 넣지 못했습니다.");
+    }
+  };
+
+  const resetTeacherForm = () => {
+    setTeacherForm(emptyTeacherForm);
+    setEditingTeacherId(null);
+    setTeacherNotice("");
+  };
+
+  const handleTeacherSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAdminMode) return;
+
+    const username = userService.normalizeUsername(teacherForm.username);
+    const name = teacherForm.name.trim();
+    const organization = teacherForm.organization.trim();
+    const password = teacherForm.password.trim();
+    const passwordConfirm = teacherForm.passwordConfirm.trim();
+    const previous = editingTeacherId ? teacherUsers.find((user) => user.id === editingTeacherId) : undefined;
+
+    if (!username) {
+      setTeacherNotice("아이디를 입력해 주세요.");
+      return;
+    }
+
+    if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+      setTeacherNotice("아이디는 영문 소문자, 숫자, 마침표, 밑줄, 하이픈을 사용해 3자 이상으로 입력해 주세요.");
+      return;
+    }
+
+    if (!name) {
+      setTeacherNotice("담당 교사 이름을 입력해 주세요.");
+      return;
+    }
+
+    if (!previous && !password) {
+      setTeacherNotice("초기 비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    if (password || passwordConfirm) {
+      if (password.length < 4) {
+        setTeacherNotice("비밀번호는 4자 이상으로 입력해 주세요.");
+        return;
+      }
+
+      if (password !== passwordConfirm) {
+        setTeacherNotice("비밀번호 확인이 일치하지 않습니다.");
+        return;
+      }
+    }
+
+    if (await userService.isUsernameTaken(username, previous?.id)) {
+      setTeacherNotice("이미 사용 중인 아이디입니다.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    try {
+      await userService.saveTeacherUser({
+        id: previous?.id ?? createId("teacher"),
+        username,
+        name,
+        organization: organization || undefined,
+        passwordHash: password ? authService.hashPassword(password) : previous?.passwordHash ?? "",
+        active: teacherForm.active,
+        createdAt: previous?.createdAt ?? now,
+        updatedAt: now,
+      });
+      setTeacherNotice(previous ? "담당 교사 계정을 수정했습니다." : "담당 교사 계정을 만들었습니다.");
+      setTeacherForm(emptyTeacherForm);
+      setEditingTeacherId(null);
+      refresh();
+    } catch (error) {
+      setTeacherNotice(error instanceof Error ? error.message : "담당 교사 계정을 저장하지 못했습니다.");
+    }
+  };
+
+  const handleEditTeacher = (user: TeacherUser) => {
+    setEditingTeacherId(user.id);
+    setTeacherForm({
+      username: user.username,
+      name: user.name,
+      organization: user.organization ?? "",
+      password: "",
+      passwordConfirm: "",
+      active: user.active,
+    });
+    setTeacherNotice("비밀번호는 변경할 때만 입력해 주세요.");
+  };
+
+  const handleToggleTeacherActive = async (user: TeacherUser) => {
+    try {
+      await userService.setTeacherUserActive(user.id, !user.active);
+      setTeacherNotice(user.active ? "담당 교사 계정을 비활성화했습니다." : "담당 교사 계정을 활성화했습니다.");
+      refresh();
+    } catch (error) {
+      setTeacherNotice(error instanceof Error ? error.message : "계정 상태를 변경하지 못했습니다.");
+    }
+  };
+
+  const handleDeleteTeacher = async (user: TeacherUser) => {
+    if (!confirm(`"${user.name}" 담당 교사 계정을 삭제할까요?`)) return;
+
+    try {
+      await userService.deleteTeacherUser(user.id);
+      setTeacherNotice("담당 교사 계정을 삭제했습니다.");
+      if (editingTeacherId === user.id) resetTeacherForm();
+      refresh();
+    } catch (error) {
+      setTeacherNotice(error instanceof Error ? error.message : "담당 교사 계정을 삭제하지 못했습니다.");
     }
   };
 
@@ -683,12 +845,17 @@ function AdminDashboard() {
   };
 
   const handleLogout = () => {
-    authService.signOut();
+    if (isTeacherMode) {
+      authService.signOutTeacher();
+    } else {
+      authService.signOut();
+    }
     setUnlockedEventIds(new Set());
     setEditingEventId(null);
     setEventForm(emptyEventForm);
     setSelectedEventPassword("");
     setSelectedEventPasswordError("");
+    onLogout?.();
   };
 
   const handleDownloadQr = () => {
@@ -708,14 +875,24 @@ function AdminDashboard() {
       <header className="border-b border-ink-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
-            <p className="text-sm font-semibold text-school-700">학교 업무용 행사 관리</p>
-            <h1 className="mt-1 text-2xl font-bold text-ink-900">교사 행사 등록 및 출석부 관리</h1>
+            <p className="text-sm font-semibold text-school-700">{isTeacherMode ? "행사 담당자 화면" : "학교 관리자 화면"}</p>
+            <h1 className="mt-1 text-2xl font-bold text-ink-900">
+              {isTeacherMode ? "내 행사 등록부 관리" : "교사 행사 등록 및 출석부 관리"}
+            </h1>
+            {teacherUser ? (
+              <p className="mt-1 text-sm text-ink-500">
+                {teacherUser.name}
+                {teacherUser.organization ? ` · ${teacherUser.organization}` : ""}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="btn-secondary" type="button" onClick={handleSeedSampleData}>
-              <ClipboardList size={18} aria-hidden="true" />
-              시연용 데이터 넣기
-            </button>
+            {isAdminMode ? (
+              <button className="btn-secondary" type="button" onClick={handleSeedSampleData}>
+                <ClipboardList size={18} aria-hidden="true" />
+                시연용 데이터 넣기
+              </button>
+            ) : null}
             <button className="btn-secondary" type="button" onClick={handleLogout}>
               <LogOut size={18} aria-hidden="true" />
               로그아웃
@@ -732,7 +909,7 @@ function AdminDashboard() {
                 <CalendarDays size={20} aria-hidden="true" />
               </div>
               <div>
-                <p className="text-sm text-ink-500">등록된 행사</p>
+                <p className="text-sm text-ink-500">{isTeacherMode ? "내 행사" : "등록된 행사"}</p>
                 <p className="text-2xl font-semibold text-ink-900">{events.length}건</p>
               </div>
             </div>
@@ -743,7 +920,7 @@ function AdminDashboard() {
                 <Users size={20} aria-hidden="true" />
               </div>
               <div>
-                <p className="text-sm text-ink-500">전체 등록 인원</p>
+                <p className="text-sm text-ink-500">{isTeacherMode ? "내 행사 등록 인원" : "전체 등록 인원"}</p>
                 <p className="text-2xl font-semibold text-ink-900">{allParticipants.length}명</p>
               </div>
             </div>
@@ -760,6 +937,163 @@ function AdminDashboard() {
             </div>
           </div>
         </section>
+
+        {isAdminMode ? (
+          <section className="rounded-lg border border-ink-200 bg-white p-5">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-ink-900">담당 교사 계정 관리</h2>
+                <p className="text-sm text-ink-500">행사 등록부를 수합할 선생님의 아이디와 비밀번호를 발급합니다.</p>
+              </div>
+              {editingTeacherId ? (
+                <button className="btn-secondary" type="button" onClick={resetTeacherForm}>
+                  <X size={18} aria-hidden="true" />
+                  계정 수정 취소
+                </button>
+              ) : null}
+            </div>
+
+            <form className="grid gap-4 lg:grid-cols-12" onSubmit={handleTeacherSubmit}>
+              <div className="lg:col-span-3">
+                <label className="field-label" htmlFor="teacher-username">
+                  아이디 *
+                </label>
+                <input
+                  id="teacher-username"
+                  className="field-input"
+                  value={teacherForm.username}
+                  onChange={(event) => setTeacherForm((form) => ({ ...form, username: event.target.value }))}
+                  placeholder="예: kim"
+                  autoComplete="username"
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="field-label" htmlFor="teacher-name">
+                  담당 교사 이름 *
+                </label>
+                <input
+                  id="teacher-name"
+                  className="field-input"
+                  value={teacherForm.name}
+                  onChange={(event) => setTeacherForm((form) => ({ ...form, name: event.target.value }))}
+                  placeholder="예: 김지윤"
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="field-label" htmlFor="teacher-organization">
+                  부서 또는 소속
+                </label>
+                <input
+                  id="teacher-organization"
+                  className="field-input"
+                  value={teacherForm.organization}
+                  onChange={(event) => setTeacherForm((form) => ({ ...form, organization: event.target.value }))}
+                  placeholder="예: 교육연구부"
+                />
+              </div>
+              <div className="lg:col-span-3">
+                <label className="field-label" htmlFor="teacher-active">
+                  계정 상태
+                </label>
+                <select
+                  id="teacher-active"
+                  className="field-input"
+                  value={teacherForm.active ? "active" : "inactive"}
+                  onChange={(event) => setTeacherForm((form) => ({ ...form, active: event.target.value === "active" }))}
+                >
+                  <option value="active">사용 가능</option>
+                  <option value="inactive">비활성화</option>
+                </select>
+              </div>
+              <div className="lg:col-span-4">
+                <label className="field-label" htmlFor="teacher-password">
+                  {editingTeacherId ? "새 비밀번호" : "초기 비밀번호 *"}
+                </label>
+                <input
+                  id="teacher-password"
+                  className="field-input"
+                  type="password"
+                  value={teacherForm.password}
+                  onChange={(event) => setTeacherForm((form) => ({ ...form, password: event.target.value }))}
+                  autoComplete="new-password"
+                  placeholder={editingTeacherId ? "변경할 때만 입력" : "담당 교사 로그인 비밀번호"}
+                />
+              </div>
+              <div className="lg:col-span-4">
+                <label className="field-label" htmlFor="teacher-password-confirm">
+                  비밀번호 확인
+                </label>
+                <input
+                  id="teacher-password-confirm"
+                  className="field-input"
+                  type="password"
+                  value={teacherForm.passwordConfirm}
+                  onChange={(event) => setTeacherForm((form) => ({ ...form, passwordConfirm: event.target.value }))}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="flex items-end lg:col-span-4">
+                <button className="btn-primary w-full" type="submit">
+                  <Plus size={18} aria-hidden="true" />
+                  {editingTeacherId ? "계정 수정 저장" : "담당 교사 계정 만들기"}
+                </button>
+              </div>
+              {teacherNotice ? <p className="font-medium text-ink-700 lg:col-span-12">{teacherNotice}</p> : null}
+            </form>
+
+            <div className="mt-5 overflow-x-auto">
+              <table className="min-w-[760px] w-full border-collapse">
+                <thead className="bg-ink-50 text-sm text-ink-700">
+                  <tr>
+                    <th className="table-cell">아이디</th>
+                    <th className="table-cell">이름</th>
+                    <th className="table-cell">부서 또는 소속</th>
+                    <th className="table-cell">상태</th>
+                    <th className="table-cell">관리</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {teacherUsers.length === 0 ? (
+                    <tr>
+                      <td className="px-5 py-8 text-center text-sm text-ink-500" colSpan={5}>
+                        등록된 담당 교사 계정이 없습니다.
+                      </td>
+                    </tr>
+                  ) : (
+                    teacherUsers.map((user) => (
+                      <tr key={user.id}>
+                        <td className="table-cell font-semibold text-ink-900">{user.username}</td>
+                        <td className="table-cell text-ink-700">{user.name}</td>
+                        <td className="table-cell text-ink-700">{user.organization || "-"}</td>
+                        <td className="table-cell">
+                          <span className={`badge ${user.active ? "bg-school-50 text-school-700" : "bg-ink-100 text-ink-700"}`}>
+                            {user.active ? "사용 가능" : "비활성화"}
+                          </span>
+                        </td>
+                        <td className="table-cell">
+                          <div className="flex flex-wrap gap-2">
+                            <button className="btn-secondary min-h-9 px-3 py-1.5" type="button" onClick={() => handleEditTeacher(user)}>
+                              <Edit3 size={16} aria-hidden="true" />
+                              수정
+                            </button>
+                            <button className="btn-secondary min-h-9 px-3 py-1.5" type="button" onClick={() => handleToggleTeacherActive(user)}>
+                              <Check size={16} aria-hidden="true" />
+                              {user.active ? "비활성화" : "활성화"}
+                            </button>
+                            <button className="btn-danger min-h-9 px-3 py-1.5" type="button" onClick={() => handleDeleteTeacher(user)}>
+                              <Trash2 size={16} aria-hidden="true" />
+                              삭제
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
 
         <section className="rounded-lg border border-ink-200 bg-white p-5">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

@@ -10,11 +10,16 @@ export const eventService = {
     return readDatabase().events.find((event) => event.id === eventId);
   },
 
+  async getEventsByOwner(ownerUserId: string): Promise<Event[]> {
+    return sortEvents(readDatabase().events.filter((event) => event.ownerUserId === ownerUserId));
+  },
+
   async getEventSummaries(): Promise<DatabaseState> {
     const state = readDatabase();
     return {
       events: sortEvents(state.events),
       participants: state.participants,
+      users: state.users,
     };
   },
 
@@ -36,6 +41,7 @@ export const eventService = {
     writeDatabase({
       events: state.events.filter((event) => event.id !== eventId),
       participants: state.participants.filter((participant) => participant.eventId !== eventId),
+      users: state.users,
     });
   },
 
