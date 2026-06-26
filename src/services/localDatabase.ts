@@ -23,6 +23,7 @@ type LegacyEvent = {
   isPublicRegistrationOpen?: boolean;
   registrationDeadline?: string;
   publicRegistrationSettings?: Partial<Event["publicRegistrationSettings"]>;
+  adminPasswordHash?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -75,6 +76,7 @@ const normalizeEvent = (event: LegacyEvent): Event => ({
         ? false
         : (event.publicRegistrationSettings?.requireEmail ?? defaultPublicRegistrationSettings.requireEmail),
   },
+  adminPasswordHash: event.adminPasswordHash,
   createdAt: event.createdAt ?? new Date().toISOString(),
   updatedAt: event.updatedAt,
 });

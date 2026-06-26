@@ -1,4 +1,5 @@
 import { defaultPublicRegistrationSettings, type DatabaseState, type Event, type Participant } from "../types";
+import { authService } from "../services/authService";
 import { createId, toDateTimeInputValue } from "../utils/format";
 
 const futureDate = (days: number, hour: number, minute = 0) => {
@@ -32,6 +33,7 @@ const makeParticipant = (
 });
 
 export const buildSampleData = (): DatabaseState => {
+  const samplePasswordHash = authService.hashPassword("teacher1234");
   const aiEvent: Event = {
     id: createId("event"),
     title: "AI 활용 수업 연수",
@@ -44,6 +46,7 @@ export const buildSampleData = (): DatabaseState => {
     isPublicRegistrationOpen: true,
     registrationDeadline: futureDate(5, 17),
     publicRegistrationSettings: defaultPublicRegistrationSettings,
+    adminPasswordHash: samplePasswordHash,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -63,6 +66,7 @@ export const buildSampleData = (): DatabaseState => {
       ...defaultPublicRegistrationSettings,
       mode: "pre_registered_signature",
     },
+    adminPasswordHash: samplePasswordHash,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -82,10 +86,11 @@ export const buildSampleData = (): DatabaseState => {
       ...defaultPublicRegistrationSettings,
       mode: "both",
       collectPhone: true,
-      requirePhone: false,
+      requirePhone: true,
       collectEmail: true,
-      requireEmail: false,
+      requireEmail: true,
     },
+    adminPasswordHash: samplePasswordHash,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

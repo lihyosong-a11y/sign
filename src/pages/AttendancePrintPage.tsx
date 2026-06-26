@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, Printer } from "lucide-react";
-import { AdminAuthGate } from "../components/AdminAuthGate";
+import { EventPasswordGate } from "../components/EventPasswordGate";
 import { eventService } from "../services/eventService";
 import { participantService } from "../services/participantService";
 import { attendanceStatusLabels, type Event, type Participant } from "../types";
@@ -10,13 +10,16 @@ import { formatDateTime, maskPhone } from "../utils/format";
 type PrintRange = "all" | "onsite";
 
 function AttendancePrintPage() {
+  const { eventId } = useParams();
+
   return (
-    <AdminAuthGate
-      title="출석부 인쇄 관리자 확인"
-      description="출석부에는 참가자 개인정보가 포함될 수 있어 관리자 확인 후 열립니다."
+    <EventPasswordGate
+      eventId={eventId}
+      title="출석부 인쇄 비밀번호 확인"
+      description="출석부에는 참가자 개인정보가 포함될 수 있어 행사 관리 비밀번호 확인 후 열립니다."
     >
       <AttendancePrintContent />
-    </AdminAuthGate>
+    </EventPasswordGate>
   );
 }
 

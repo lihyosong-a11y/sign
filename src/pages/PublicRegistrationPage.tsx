@@ -147,15 +147,18 @@ function PublicRegistrationPage() {
     const nextErrors: string[] = [];
     if (!form.name.trim()) nextErrors.push("성명을 입력해 주세요.");
     if (!form.organization.trim()) nextErrors.push("소속 학교 또는 부서를 입력해 주세요.");
-    if (publicSettings.collectPhone && publicSettings.requirePhone && !form.phone.trim()) {
+    if (publicSettings.collectPhone && !form.phone.trim()) {
       nextErrors.push("연락처를 입력해 주세요.");
     } else if (publicSettings.collectPhone && form.phone.trim() && !isValidPhone(form.phone)) {
       nextErrors.push("연락처 형식을 확인해 주세요. 예: 010-1234-5678");
     }
-    if (publicSettings.collectEmail && publicSettings.requireEmail && !form.email.trim()) {
+    if (publicSettings.collectEmail && !form.email.trim()) {
       nextErrors.push("이메일을 입력해 주세요.");
     } else if (publicSettings.collectEmail && form.email.trim() && !isValidEmail(form.email)) {
       nextErrors.push("이메일 형식을 확인해 주세요.");
+    }
+    if (publicSettings.collectNote && !form.note.trim()) {
+      nextErrors.push("기타 요청 사항을 입력해 주세요.");
     }
     if (!privacyAgreed) nextErrors.push("개인정보 수집 및 이용에 동의해 주세요.");
     if (!form.signatureDataUrl) nextErrors.push("서명을 입력하거나 서명 이미지를 업로드해 주세요.");
@@ -456,7 +459,7 @@ function PublicRegistrationPage() {
                           <div className="grid gap-4 sm:grid-cols-2">
                             {publicSettings.collectPhone ? (
                               <label>
-                                <span className="field-label">연락처 {publicSettings.requirePhone ? "*" : ""}</span>
+                                <span className="field-label">연락처 *</span>
                                 <input
                                   className="field-input"
                                   value={form.phone}
@@ -470,7 +473,7 @@ function PublicRegistrationPage() {
                             ) : null}
                             {publicSettings.collectEmail ? (
                               <label>
-                                <span className="field-label">이메일 {publicSettings.requireEmail ? "*" : ""}</span>
+                                <span className="field-label">이메일 *</span>
                                 <input
                                   className="field-input"
                                   type="email"
@@ -501,7 +504,7 @@ function PublicRegistrationPage() {
 
                         {publicSettings.collectNote ? (
                           <label>
-                            <span className="field-label">기타 요청 사항</span>
+                            <span className="field-label">기타 요청 사항 *</span>
                             <textarea
                               className="field-input min-h-24 resize-y"
                               value={form.note}

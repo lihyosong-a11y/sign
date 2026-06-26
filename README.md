@@ -9,7 +9,9 @@ npm install
 npm run dev
 ```
 
-기본 관리자 비밀번호는 `teacher1234`입니다. 로컬에서 바꾸려면 `.env.local`을 만들고 아래처럼 설정합니다.
+`/admin`에서는 공통 관리자 한 명이 아니라 담당자가 직접 행사를 만들고, 행사별 관리 비밀번호를 등록합니다. 이후 참가자 명단, 엑셀 다운로드, 출석부 인쇄는 해당 행사 비밀번호를 입력해야 열립니다.
+
+`.env.local`을 만들면 Supabase 연결값과 이전 테스트 데이터용 임시 비밀번호를 설정할 수 있습니다.
 
 ```env
 VITE_ADMIN_PASSWORD=원하는_관리자_비밀번호
@@ -25,7 +27,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_iyTkqszXjnHEdZsPIcHhdA_aDEgcBr3
 - 공개 참가자 등록: `/event/{행사ID}`
 - 행사별 출석부 인쇄: `/event/{행사ID}/attendance`
 
-공개 등록 페이지는 행사 정보와 본인 등록 폼만 표시합니다. 참가자 전체 명단 조회, 엑셀 다운로드, 출석부 인쇄는 관리자 화면에서만 접근하도록 분리했습니다.
+공개 등록 페이지는 행사 정보와 본인 등록 폼만 표시합니다. 참가자 전체 명단 조회, 엑셀 다운로드, 출석부 인쇄는 행사별 관리 비밀번호를 확인한 뒤 접근하도록 분리했습니다.
 
 ## 데이터 저장 구조
 
@@ -37,7 +39,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_iyTkqszXjnHEdZsPIcHhdA_aDEgcBr3
 - localStorage 내부 구현: `src/services/localDatabase.ts`
 - Supabase 클라이언트 준비: `src/services/supabaseClient.ts`
 
-추후 Supabase로 전환할 때는 주로 `eventService.ts`, `participantService.ts`, `authService.ts`를 Supabase 쿼리와 Supabase Auth 호출로 교체하면 됩니다.
+추후 Supabase로 전환할 때는 주로 `eventService.ts`, `participantService.ts`, `authService.ts`를 Supabase 쿼리와 Supabase Auth 또는 행사별 권한 검증 호출로 교체하면 됩니다.
 
 ## 타입 구조
 
@@ -89,6 +91,7 @@ React Router 새로고침 문제가 생기지 않도록 `vercel.json`에 모든 
 
 - Supabase 테이블 생성: `events`, `participants`
 - Supabase Auth 기반 관리자 로그인
+- 행사별 관리자 권한 또는 소유자 계정 연결
 - Row Level Security 정책
 - 공개 등록 insert 권한과 관리자 조회/수정/삭제 권한 분리
 - HTTPS 환경에서 운영
@@ -96,10 +99,11 @@ React Router 새로고침 문제가 생기지 않도록 `vercel.json`에 모든 
 
 ## 주요 기능
 
-- 행사 생성, 수정, 삭제
+- 담당자별 행사 생성과 행사별 관리 비밀번호 설정
+- 행사 비밀번호 확인 후 행사 수정, 삭제, 참가자 관리, 출석부 인쇄
 - 공개 등록 링크 복사와 QR 코드 이미지 제공
 - 행사별 공개 등록 방식 선택: 새 참가자 등록, 사전 명단 선택 후 서명, 둘 다 허용
-- 행사별 공개 등록 입력 항목 선택: 연락처와 이메일은 기본 미수집, 필요 시 선택 수집/필수 지정
+- 행사별 공개 등록 입력 항목 선택: 연락처와 이메일은 기본 미수집, 선택하면 필수 입력
 - 관리자 사전 참가자 등록
 - Excel 또는 CSV 일괄 업로드와 미리보기
 - 중복 참가자 확인

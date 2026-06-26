@@ -10,6 +10,7 @@ import {
   Edit3,
   FileSpreadsheet,
   Link as LinkIcon,
+  Lock,
   LogOut,
   PenLine,
   Plus,
@@ -23,7 +24,6 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { AdminAuthGate } from "../components/AdminAuthGate";
 import { SignatureInput } from "../components/SignatureInput";
 import { buildSampleData } from "../data/sampleData";
 import { authService } from "../services/authService";
@@ -73,6 +73,8 @@ type EventFormState = {
   isPublicRegistrationOpen: boolean;
   registrationDeadline: string;
   publicRegistrationSettings: PublicRegistrationSettings;
+  adminPassword: string;
+  adminPasswordConfirm: string;
 };
 
 type ParticipantFilter = {
@@ -99,6 +101,8 @@ const emptyEventForm: EventFormState = {
   isPublicRegistrationOpen: true,
   registrationDeadline: "",
   publicRegistrationSettings: { ...defaultPublicRegistrationSettings },
+  adminPassword: "",
+  adminPasswordConfirm: "",
 };
 
 const emptyParticipantForm: ParticipantDraft = {
@@ -173,11 +177,7 @@ const validateParticipantDraft = (draft: ParticipantDraft) => {
 };
 
 function AdminPage() {
-  return (
-    <AdminAuthGate>
-      <AdminDashboard />
-    </AdminAuthGate>
-  );
+  return <AdminDashboard />;
 }
 
 function AdminDashboard() {
@@ -198,6 +198,9 @@ function AdminDashboard() {
   const [qrEvent, setQrEvent] = useState<Event | null>(null);
   const [signatureParticipant, setSignatureParticipant] = useState<Participant | null>(null);
   const [signatureDraft, setSignatureDraft] = useState<string | undefined>();
+  const [unlockedEventIds, setUnlockedEventIds] = useState<Set<string>>(() => new Set());
+  const [selectedEventPassword, setSelectedEventPassword] = useState("");
+  const [selectedEventPasswordError, setSelectedEventPasswordError] = useState("");
   const [events, setEvents] = useState<Event[]>([]);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,15 +241,29 @@ function AdminDashboard() {
     }
   }, [events, selectedEventId]);
 
+  useEffect(() => {
+    setUnlockedEventIds(new Set(events.filter((event) => authService.isEventAuthenticated(event.id)).map((event) => event.id)));
+  }, [events]);
+
+  useEffect(() => {
+    setSelectedEventPassword("");
+    setSelectedEventPasswordError("");
+    setParticipantNotice("");
+    setEditingParticipant(null);
+    setImportRows([]);
+    setImportFileName("");
+  }, [selectedEventId]);
+
   const selectedEvent = events.find((event) => event.id === selectedEventId);
+  const selectedEventUnlocked = selectedEvent ? unlockedEventIds.has(selectedEvent.id) : false;
   const selectedParticipants = useMemo(
     () =>
-      selectedEvent
+      selectedEvent && selectedEventUnlocked
         ? allParticipants
             .filter((participant) => participant.eventId === selectedEvent.id)
             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         : [],
-    [allParticipants, selectedEvent],
+    [allParticipants, selectedEvent, selectedEventUnlocked],
   );
 
   const duplicateGroups = useMemo(() => findDuplicateGroups(selectedParticipants), [selectedParticipants]);
@@ -301,8 +318,8 @@ function AdminDashboard() {
         ...patch,
       };
 
-      if (!nextSettings.collectPhone) nextSettings.requirePhone = false;
-      if (!nextSettings.collectEmail) nextSettings.requireEmail = false;
+      if ("collectPhone" in patch) nextSettings.requirePhone = Boolean(patch.collectPhone);
+      if ("collectEmail" in patch) nextSettings.requireEmail = Boolean(patch.collectEmail);
 
       return {
         ...form,
@@ -327,10 +344,35 @@ function AdminDashboard() {
 
     const now = new Date().toISOString();
     const previous = editingEventId ? events.find((item) => item.id === editingEventId) : undefined;
+    const nextAdminPassword = eventForm.adminPassword.trim();
+    const nextAdminPasswordConfirm = eventForm.adminPasswordConfirm.trim();
+
+    if (!previous && !nextAdminPassword) {
+      setEventError("행사 관리에 사용할 비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    if (!previous?.adminPasswordHash && !nextAdminPassword) {
+      setEventError("이 행사에 사용할 관리 비밀번호를 설정해 주세요.");
+      return;
+    }
+
+    if (nextAdminPassword || nextAdminPasswordConfirm) {
+      if (nextAdminPassword.length < 4) {
+        setEventError("관리 비밀번호는 4자 이상으로 입력해 주세요.");
+        return;
+      }
+
+      if (nextAdminPassword !== nextAdminPasswordConfirm) {
+        setEventError("관리 비밀번호 확인이 일치하지 않습니다.");
+        return;
+      }
+    }
+
     const publicRegistrationSettings: PublicRegistrationSettings = {
       ...eventForm.publicRegistrationSettings,
-      requirePhone: eventForm.publicRegistrationSettings.collectPhone ? eventForm.publicRegistrationSettings.requirePhone : false,
-      requireEmail: eventForm.publicRegistrationSettings.collectEmail ? eventForm.publicRegistrationSettings.requireEmail : false,
+      requirePhone: eventForm.publicRegistrationSettings.collectPhone,
+      requireEmail: eventForm.publicRegistrationSettings.collectEmail,
     };
     const savedEvent: Event = {
       id: previous?.id ?? createId("event"),
@@ -344,6 +386,7 @@ function AdminDashboard() {
       isPublicRegistrationOpen: eventForm.isPublicRegistrationOpen,
       registrationDeadline: eventForm.registrationDeadline || undefined,
       publicRegistrationSettings,
+      adminPasswordHash: nextAdminPassword ? authService.hashPassword(nextAdminPassword) : previous?.adminPasswordHash,
       createdAt: previous?.createdAt ?? now,
       updatedAt: now,
     };
@@ -353,6 +396,8 @@ function AdminDashboard() {
       setEventForm(emptyEventForm);
       setEditingEventId(null);
       setSelectedEventId(savedEvent.id);
+      authService.rememberEventAccess(savedEvent.id);
+      setUnlockedEventIds((current) => new Set([...current, savedEvent.id]));
       refresh();
     } catch (error) {
       setEventError(error instanceof Error ? error.message : "행사를 저장하지 못했습니다.");
@@ -360,6 +405,12 @@ function AdminDashboard() {
   };
 
   const handleEditEvent = (event: Event) => {
+    if (!unlockedEventIds.has(event.id)) {
+      setSelectedEventId(event.id);
+      setSelectedEventPasswordError("행사를 수정하려면 먼저 관리 비밀번호를 입력해 주세요.");
+      return;
+    }
+
     setEditingEventId(event.id);
     setEventForm({
       title: event.title,
@@ -375,14 +426,28 @@ function AdminDashboard() {
         ...defaultPublicRegistrationSettings,
         ...event.publicRegistrationSettings,
       },
+      adminPassword: "",
+      adminPasswordConfirm: "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDeleteEvent = async (event: Event) => {
+    if (!unlockedEventIds.has(event.id)) {
+      setSelectedEventId(event.id);
+      setSelectedEventPasswordError("행사를 삭제하려면 먼저 관리 비밀번호를 입력해 주세요.");
+      return;
+    }
+
     if (!confirm(`"${event.title}" 행사를 삭제할까요? 참가자 명단도 함께 삭제됩니다.`)) return;
     try {
       await eventService.deleteEvent(event.id);
+      authService.signOutEvent(event.id);
+      setUnlockedEventIds((current) => {
+        const next = new Set(current);
+        next.delete(event.id);
+        return next;
+      });
       if (selectedEventId === event.id) setSelectedEventId(null);
       refresh();
     } catch (error) {
@@ -405,6 +470,10 @@ function AdminDashboard() {
   const handleParticipantSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedEvent) return;
+    if (!selectedEventUnlocked) {
+      setParticipantNotice("행사 관리 비밀번호를 먼저 입력해 주세요.");
+      return;
+    }
 
     const errors = validateParticipantDraft(participantForm);
     if (errors.length > 0) {
@@ -448,6 +517,10 @@ function AdminDashboard() {
   const handleEditParticipantSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!editingParticipant || !selectedEvent) return;
+    if (!selectedEventUnlocked) {
+      setParticipantNotice("행사 관리 비밀번호를 먼저 입력해 주세요.");
+      return;
+    }
 
     const draft: ParticipantDraft = {
       name: editingParticipant.name,
@@ -546,6 +619,10 @@ function AdminDashboard() {
 
   const handleConfirmImport = async () => {
     if (!selectedEvent) return;
+    if (!selectedEventUnlocked) {
+      setParticipantNotice("행사 관리 비밀번호를 먼저 입력해 주세요.");
+      return;
+    }
     if (importPreviewRows.length === 0) {
       alert("업로드할 참가자 파일을 먼저 선택해 주세요.");
       return;
@@ -590,9 +667,27 @@ function AdminDashboard() {
     }
   };
 
+  const handleUnlockSelectedEvent = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedEvent) return;
+
+    if (await authService.signInToEvent(selectedEvent, selectedEventPassword)) {
+      setUnlockedEventIds((current) => new Set([...current, selectedEvent.id]));
+      setSelectedEventPassword("");
+      setSelectedEventPasswordError("");
+      return;
+    }
+
+    setSelectedEventPasswordError("행사 관리 비밀번호가 올바르지 않습니다.");
+  };
+
   const handleLogout = () => {
     authService.signOut();
-    window.location.reload();
+    setUnlockedEventIds(new Set());
+    setEditingEventId(null);
+    setEventForm(emptyEventForm);
+    setSelectedEventPassword("");
+    setSelectedEventPasswordError("");
   };
 
   const handleDownloadQr = () => {
@@ -620,7 +715,7 @@ function AdminDashboard() {
             </button>
             <button className="btn-secondary" type="button" onClick={handleLogout}>
               <LogOut size={18} aria-hidden="true" />
-              나가기
+              열린 행사 잠금
             </button>
           </div>
         </div>
@@ -796,6 +891,33 @@ function AdminDashboard() {
                 onChange={(event) => setEventForm((form) => ({ ...form, registrationDeadline: event.target.value }))}
               />
             </div>
+            <div className="lg:col-span-4">
+              <label className="field-label" htmlFor="event-admin-password">
+                {editingEventId ? "새 관리 비밀번호" : "관리 비밀번호 *"}
+              </label>
+              <input
+                id="event-admin-password"
+                className="field-input"
+                type="password"
+                value={eventForm.adminPassword}
+                onChange={(event) => setEventForm((form) => ({ ...form, adminPassword: event.target.value }))}
+                autoComplete="new-password"
+                placeholder={editingEventId ? "변경할 때만 입력" : "등록부 관리용 비밀번호"}
+              />
+            </div>
+            <div className="lg:col-span-4">
+              <label className="field-label" htmlFor="event-admin-password-confirm">
+                {editingEventId ? "새 비밀번호 확인" : "비밀번호 확인 *"}
+              </label>
+              <input
+                id="event-admin-password-confirm"
+                className="field-input"
+                type="password"
+                value={eventForm.adminPasswordConfirm}
+                onChange={(event) => setEventForm((form) => ({ ...form, adminPasswordConfirm: event.target.value }))}
+                autoComplete="new-password"
+              />
+            </div>
             <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 lg:col-span-12">
               <div className="grid gap-4 lg:grid-cols-[minmax(220px,320px)_1fr]">
                 <label>
@@ -830,32 +952,12 @@ function AdminDashboard() {
                     </label>
                     <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
                       <input
-                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600 disabled:opacity-50"
-                        type="checkbox"
-                        checked={eventForm.publicRegistrationSettings.requirePhone}
-                        disabled={!eventForm.publicRegistrationSettings.collectPhone}
-                        onChange={(event) => updatePublicRegistrationSettings({ requirePhone: event.target.checked })}
-                      />
-                      연락처 필수
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
-                      <input
                         className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
                         type="checkbox"
                         checked={eventForm.publicRegistrationSettings.collectEmail}
                         onChange={(event) => updatePublicRegistrationSettings({ collectEmail: event.target.checked })}
                       />
                       이메일 받기
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
-                      <input
-                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600 disabled:opacity-50"
-                        type="checkbox"
-                        checked={eventForm.publicRegistrationSettings.requireEmail}
-                        disabled={!eventForm.publicRegistrationSettings.collectEmail}
-                        onChange={(event) => updatePublicRegistrationSettings({ requireEmail: event.target.checked })}
-                      />
-                      이메일 필수
                     </label>
                     <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
                       <input
@@ -877,7 +979,7 @@ function AdminDashboard() {
                     </label>
                   </div>
                   <p className="mt-3 text-sm leading-6 text-ink-600">
-                    사전 명단 서명 방식은 관리자가 등록하거나 업로드한 참가자가 공개 링크에서 본인을 선택하고 서명만 남기는 흐름입니다.
+                    선택한 입력 항목은 공개 등록에서 필수 항목으로 표시됩니다. 사전 명단 서명 방식은 관리자가 등록하거나 업로드한 참가자가 공개 링크에서 본인을 선택하고 서명만 남기는 흐름입니다.
                   </p>
                 </div>
               </div>
@@ -989,7 +1091,7 @@ function AdminDashboard() {
           </div>
         </section>
 
-        {selectedEvent ? (
+        {selectedEvent ? selectedEventUnlocked ? (
           <section className="rounded-lg border border-ink-200 bg-white">
             <div className="border-b border-ink-200 p-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1467,6 +1569,54 @@ function AdminDashboard() {
                   </div>
                 </section>
               </div>
+            </div>
+          </section>
+        ) : (
+          <section className="rounded-lg border border-ink-200 bg-white p-6">
+            <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-start">
+              <div>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                    <Lock size={22} aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-school-700">행사 관리 잠금</p>
+                    <h2 className="mt-1 text-xl font-semibold text-ink-900">{selectedEvent.title}</h2>
+                    <p className="mt-1 text-sm leading-6 text-ink-600">
+                      참가자 명단, 엑셀 다운로드, 출석부 인쇄, 행사 수정은 이 행사를 만들 때 등록한 관리 비밀번호를 입력한 뒤 사용할 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button className="btn-secondary" type="button" onClick={() => copyText(getPublicEventUrl(selectedEvent.id))}>
+                    <LinkIcon size={18} aria-hidden="true" />
+                    공개 등록 링크 복사
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => setQrEvent(selectedEvent)}>
+                    <QrCode size={18} aria-hidden="true" />
+                    QR 코드
+                  </button>
+                </div>
+              </div>
+
+              <form className="rounded-lg border border-ink-200 bg-ink-50 p-4" onSubmit={handleUnlockSelectedEvent}>
+                <label>
+                  <span className="field-label">관리 비밀번호</span>
+                  <input
+                    className="field-input bg-white"
+                    type="password"
+                    value={selectedEventPassword}
+                    onChange={(event) => setSelectedEventPassword(event.target.value)}
+                    autoComplete="current-password"
+                  />
+                </label>
+                {selectedEventPasswordError ? <p className="mt-3 text-sm font-medium text-red-600">{selectedEventPasswordError}</p> : null}
+                <button className="btn-primary mt-4 w-full" type="submit">
+                  <Check size={18} aria-hidden="true" />
+                  등록부 관리 열기
+                </button>
+              </form>
             </div>
           </section>
         ) : (

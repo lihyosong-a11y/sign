@@ -255,7 +255,7 @@ try {
   await navigate(cdp, `${appUrl}/event/${firstEventId}`);
   const publicOk = await evaluate(
     cdp,
-    `Boolean(document.querySelector("form")) && document.querySelectorAll("input").length >= 4 && Boolean(document.querySelector("textarea"))`,
+    `Boolean(document.querySelector("form")) && document.querySelectorAll("input").length >= 2 && Boolean(document.querySelector("canvas"))`,
   );
   if (!publicOk) throw new Error("Public registration screen check failed");
   await screenshot(cdp, "public-registration.png");

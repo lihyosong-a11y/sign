@@ -21,7 +21,7 @@ export const defaultPublicRegistrationSettings: PublicRegistrationSettings = {
   collectEmail: false,
   requireEmail: false,
   collectAttendanceType: true,
-  collectNote: true,
+  collectNote: false,
 };
 
 export interface Event {
@@ -36,6 +36,7 @@ export interface Event {
   isPublicRegistrationOpen: boolean;
   registrationDeadline?: string;
   publicRegistrationSettings: PublicRegistrationSettings;
+  adminPasswordHash?: string;
   createdAt: string;
   updatedAt?: string;
 }
