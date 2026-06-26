@@ -108,6 +108,8 @@ type AdminDashboardProps = {
   onLogout?: () => void;
 };
 
+type DashboardTab = "teachers" | "events" | "participants";
+
 const emptyEventForm: EventFormState = {
   title: "",
   category: "연수",
@@ -210,6 +212,7 @@ function AdminPage() {
 export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminDashboardProps) {
   const isTeacherMode = mode === "teacher";
   const isAdminMode = mode === "admin";
+  const [activeTab, setActiveTab] = useState<DashboardTab>("events");
   const [revision, setRevision] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -292,6 +295,12 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   useEffect(() => {
     setUnlockedEventIds(new Set(events.filter((event) => authService.isEventAuthenticated(event.id)).map((event) => event.id)));
   }, [events]);
+
+  useEffect(() => {
+    if (isTeacherMode && activeTab === "teachers") {
+      setActiveTab("events");
+    }
+  }, [activeTab, isTeacherMode]);
 
   useEffect(() => {
     setSelectedEventPassword("");
@@ -447,6 +456,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       setEventForm(emptyEventForm);
       setEditingEventId(null);
       setSelectedEventId(savedEvent.id);
+      setActiveTab("events");
       authService.rememberEventAccess(savedEvent.id);
       setUnlockedEventIds((current) => new Set([...current, savedEvent.id]));
       refresh();
@@ -463,6 +473,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     }
 
     setEditingEventId(event.id);
+    setActiveTab("events");
     setEventForm({
       title: event.title,
       category: event.category,
@@ -512,6 +523,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       await eventService.seedSampleData(buildSampleData());
       setSelectedEventId(null);
       setImportRows([]);
+      setActiveTab("events");
       refresh();
     } catch (error) {
       setStoreError(error instanceof Error ? error.message : "시연용 데이터를 넣지 못했습니다.");
@@ -596,6 +608,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
 
   const handleEditTeacher = (user: TeacherUser) => {
     setEditingTeacherId(user.id);
+    setActiveTab("teachers");
     setTeacherForm({
       username: user.username,
       name: user.name,
@@ -870,6 +883,28 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     link.remove();
   };
 
+  const dashboardTabs: Array<{ id: DashboardTab; label: string; description: string }> = [
+    ...(isAdminMode
+      ? [
+          {
+            id: "teachers" as const,
+            label: "담당 교사 계정",
+            description: `${teacherUsers.length}명`,
+          },
+        ]
+      : []),
+    {
+      id: "events",
+      label: "행사 관리",
+      description: `${events.length}건`,
+    },
+    {
+      id: "participants",
+      label: "참가자 관리",
+      description: selectedEvent ? selectedEvent.title : "행사 선택",
+    },
+  ];
+
   return (
     <main className="min-h-screen bg-ink-50">
       <header className="border-b border-ink-200 bg-white">
@@ -938,7 +973,32 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
           </div>
         </section>
 
-        {isAdminMode ? (
+        <nav className="rounded-lg border border-ink-200 bg-white p-2 shadow-soft" aria-label="관리 화면 탭">
+          <div className="grid gap-2 md:grid-cols-3">
+            {dashboardTabs.map((tab) => {
+              const selected = activeTab === tab.id;
+
+              return (
+                <button
+                  key={tab.id}
+                  className={`rounded-md border px-4 py-3 text-left transition ${
+                    selected
+                      ? "border-school-600 bg-school-50 text-school-800"
+                      : "border-transparent text-ink-700 hover:border-ink-200 hover:bg-ink-50"
+                  }`}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  aria-current={selected ? "page" : undefined}
+                >
+                  <span className="block text-sm font-semibold">{tab.label}</span>
+                  <span className="mt-1 block truncate text-xs text-ink-500">{tab.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {activeTab === "teachers" && isAdminMode ? (
           <section className="rounded-lg border border-ink-200 bg-white p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1095,6 +1155,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
           </section>
         ) : null}
 
+        {activeTab === "events" ? (
+          <div className="grid gap-6">
         <section className="rounded-lg border border-ink-200 bg-white p-5">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1409,7 +1471,14 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                               <Trash2 size={16} aria-hidden="true" />
                               삭제
                             </button>
-                            <button className="btn-primary min-h-9 px-3 py-1.5" type="button" onClick={() => setSelectedEventId(event.id)}>
+                            <button
+                              className="btn-primary min-h-9 px-3 py-1.5"
+                              type="button"
+                              onClick={() => {
+                                setSelectedEventId(event.id);
+                                setActiveTab("participants");
+                              }}
+                            >
                               <Users size={16} aria-hidden="true" />
                               참가자 관리
                             </button>
@@ -1428,6 +1497,11 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
           </div>
         </section>
 
+          </div>
+        ) : null}
+
+        {activeTab === "participants" ? (
+          <>
         {selectedEvent ? selectedEventUnlocked ? (
           <section className="rounded-lg border border-ink-200 bg-white">
             <div className="border-b border-ink-200 p-5">
@@ -1963,6 +2037,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
             <p className="mt-1 text-sm text-ink-500">행사를 먼저 등록하거나 시연용 데이터를 넣으면 참가자 관리 화면이 열립니다.</p>
           </section>
         )}
+          </>
+        ) : null}
       </div>
 
       {qrEvent ? (

@@ -309,6 +309,21 @@ try {
   if (!attendanceOk) throw new Error("Attendance print screen check failed");
   await screenshot(cdp, "attendance.png");
 
+  await navigate(cdp, `${appUrl}/admin`);
+  await evaluate(
+    cdp,
+    `[...document.querySelectorAll("button")].find((button) => button.textContent.includes("로그아웃"))?.click()`,
+  );
+  await sleep(500);
+  const logoutOk = await evaluate(
+    cdp,
+    `sessionStorage.getItem("teacher-event-admin-authenticated") !== "true" &&
+      document.body.innerText.includes("관리자 로그인") &&
+      Boolean(document.querySelector('input[type="password"]'))`,
+  );
+  if (!logoutOk) throw new Error("Admin logout check failed");
+  await screenshot(cdp, "admin-logout.png");
+
   cdp.close();
   console.log(`BROWSER_CHECK_OK ${outDir}`);
 } finally {

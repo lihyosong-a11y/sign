@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { authService } from "../services/authService";
 
@@ -17,6 +17,12 @@ export function AdminAuthGate({
   const [authenticated, setAuthenticated] = useState(authService.isAdminAuthenticated());
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    return authService.subscribeAuthSessionChange(() => {
+      setAuthenticated(authService.isAdminAuthenticated());
+    });
+  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();

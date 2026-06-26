@@ -4,7 +4,12 @@ import { readDatabase } from "./localDatabase";
 const ADMIN_SESSION_KEY = "teacher-event-admin-authenticated";
 const TEACHER_SESSION_KEY = "teacher-event-teacher-user-id";
 const EVENT_SESSION_PREFIX = "teacher-event-admin-event:";
+const AUTH_SESSION_CHANGE_EVENT = "teacher-event-auth-session-change";
 const normalizeUsername = (username: string) => username.trim().toLowerCase();
+
+const notifyAuthSessionChange = () => {
+  window.dispatchEvent(new Event(AUTH_SESSION_CHANGE_EVENT));
+};
 
 const localHashPassword = (password: string) => {
   let hash = 5381;
@@ -19,6 +24,11 @@ export const authService = {
     return localHashPassword(password.trim());
   },
 
+  subscribeAuthSessionChange(listener: () => void) {
+    window.addEventListener(AUTH_SESSION_CHANGE_EVENT, listener);
+    return () => window.removeEventListener(AUTH_SESSION_CHANGE_EVENT, listener);
+  },
+
   isAdminAuthenticated() {
     return sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
   },
@@ -29,6 +39,7 @@ export const authService = {
 
     if (success) {
       sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+      notifyAuthSessionChange();
     }
 
     return success;
@@ -55,6 +66,7 @@ export const authService = {
 
     if (user) {
       sessionStorage.setItem(TEACHER_SESSION_KEY, user.id);
+      notifyAuthSessionChange();
       return user;
     }
 
@@ -94,6 +106,7 @@ export const authService = {
     Object.keys(sessionStorage)
       .filter((key) => key.startsWith(EVENT_SESSION_PREFIX))
       .forEach((key) => sessionStorage.removeItem(key));
+    notifyAuthSessionChange();
   },
 
   signOut() {
@@ -102,5 +115,6 @@ export const authService = {
     Object.keys(sessionStorage)
       .filter((key) => key.startsWith(EVENT_SESSION_PREFIX))
       .forEach((key) => sessionStorage.removeItem(key));
+    notifyAuthSessionChange();
   },
 };
