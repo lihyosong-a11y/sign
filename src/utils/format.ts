@@ -1,4 +1,5 @@
 import type { Event, Participant } from "../types";
+import { getAppBaseUrl } from "./appUrl";
 
 export const createId = (prefix: string) => {
   const random =
@@ -103,12 +104,6 @@ export const hasDuplicateParticipant = (
   return participants.some(
     (participant) => participant.id !== ignoreParticipantId && duplicateKey(participant.name, participant.phone) === target,
   );
-};
-
-const getAppBaseUrl = () => {
-  const configuredUrl = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
-  const baseUrl = configuredUrl || window.location.origin;
-  return baseUrl.replace(/\/+$/, "");
 };
 
 export const getPublicEventUrl = (eventId: string) => {
