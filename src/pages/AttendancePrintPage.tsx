@@ -16,8 +16,8 @@ function AttendancePrintPage() {
   return (
     <EventPasswordGate
       eventId={eventId}
-      title="출석부 인쇄 비밀번호 확인"
-      description="출석부에는 참가자 개인정보가 포함될 수 있어 행사 관리 비밀번호 확인 후 열립니다."
+      title="출석부 인쇄 권한 확인"
+      description="출석부에는 참가자 개인정보가 포함될 수 있어 학교 관리자 또는 해당 행사 담당 교사 로그인 후 열립니다."
     >
       <AttendancePrintContent />
     </EventPasswordGate>

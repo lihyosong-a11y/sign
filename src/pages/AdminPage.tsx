@@ -76,8 +76,6 @@ type EventFormState = {
   isPublicRegistrationOpen: boolean;
   registrationDeadline: string;
   publicRegistrationSettings: PublicRegistrationSettings;
-  adminPassword: string;
-  adminPasswordConfirm: string;
 };
 
 type ParticipantFilter = {
@@ -121,8 +119,6 @@ const emptyEventForm: EventFormState = {
   isPublicRegistrationOpen: true,
   registrationDeadline: "",
   publicRegistrationSettings: { ...defaultPublicRegistrationSettings },
-  adminPassword: "",
-  adminPasswordConfirm: "",
 };
 
 const emptyParticipantForm: ParticipantDraft = {
@@ -231,8 +227,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   const [signatureParticipant, setSignatureParticipant] = useState<Participant | null>(null);
   const [signatureDraft, setSignatureDraft] = useState<string | undefined>();
   const [unlockedEventIds, setUnlockedEventIds] = useState<Set<string>>(() => new Set());
-  const [selectedEventPassword, setSelectedEventPassword] = useState("");
-  const [selectedEventPasswordError, setSelectedEventPasswordError] = useState("");
   const [events, setEvents] = useState<Event[]>([]);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [teacherUsers, setTeacherUsers] = useState<TeacherUser[]>([]);
@@ -303,8 +297,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   }, [activeTab, isTeacherMode]);
 
   useEffect(() => {
-    setSelectedEventPassword("");
-    setSelectedEventPasswordError("");
     setParticipantNotice("");
     setEditingParticipant(null);
     setImportRows([]);
@@ -403,30 +395,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
 
     const now = new Date().toISOString();
     const previous = editingEventId ? events.find((item) => item.id === editingEventId) : undefined;
-    const nextAdminPassword = eventForm.adminPassword.trim();
-    const nextAdminPasswordConfirm = eventForm.adminPasswordConfirm.trim();
-
-    if (!previous && !nextAdminPassword) {
-      setEventError("행사 관리에 사용할 비밀번호를 입력해 주세요.");
-      return;
-    }
-
-    if (!previous?.adminPasswordHash && !nextAdminPassword) {
-      setEventError("이 행사에 사용할 관리 비밀번호를 설정해 주세요.");
-      return;
-    }
-
-    if (nextAdminPassword || nextAdminPasswordConfirm) {
-      if (nextAdminPassword.length < 4) {
-        setEventError("관리 비밀번호는 4자 이상으로 입력해 주세요.");
-        return;
-      }
-
-      if (nextAdminPassword !== nextAdminPasswordConfirm) {
-        setEventError("관리 비밀번호 확인이 일치하지 않습니다.");
-        return;
-      }
-    }
 
     const publicRegistrationSettings: PublicRegistrationSettings = {
       ...eventForm.publicRegistrationSettings,
@@ -445,7 +413,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       isPublicRegistrationOpen: eventForm.isPublicRegistrationOpen,
       registrationDeadline: eventForm.registrationDeadline || undefined,
       publicRegistrationSettings,
-      adminPasswordHash: nextAdminPassword ? authService.hashPassword(nextAdminPassword) : previous?.adminPasswordHash,
+      adminPasswordHash: previous?.adminPasswordHash,
       ownerUserId: previous?.ownerUserId ?? teacherUser?.id,
       createdAt: previous?.createdAt ?? now,
       updatedAt: now,
@@ -457,7 +425,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       setEditingEventId(null);
       setSelectedEventId(savedEvent.id);
       setActiveTab("events");
-      authService.rememberEventAccess(savedEvent.id);
       setUnlockedEventIds((current) => new Set([...current, savedEvent.id]));
       refresh();
     } catch (error) {
@@ -468,7 +435,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   const handleEditEvent = (event: Event) => {
     if (!canManageDashboardEvent(event)) {
       setSelectedEventId(event.id);
-      setSelectedEventPasswordError("행사를 수정하려면 먼저 관리 비밀번호를 입력해 주세요.");
+      setStoreError("이 행사를 수정할 권한이 없습니다.");
       return;
     }
 
@@ -488,8 +455,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
         ...defaultPublicRegistrationSettings,
         ...event.publicRegistrationSettings,
       },
-      adminPassword: "",
-      adminPasswordConfirm: "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -497,7 +462,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   const handleDeleteEvent = async (event: Event) => {
     if (!canManageDashboardEvent(event)) {
       setSelectedEventId(event.id);
-      setSelectedEventPasswordError("행사를 삭제하려면 먼저 관리 비밀번호를 입력해 주세요.");
+      setStoreError("이 행사를 삭제할 권한이 없습니다.");
       return;
     }
 
@@ -647,7 +612,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     event.preventDefault();
     if (!selectedEvent) return;
     if (!selectedEventUnlocked) {
-      setParticipantNotice("행사 관리 비밀번호를 먼저 입력해 주세요.");
+      setParticipantNotice("이 행사를 관리할 권한이 없습니다.");
       return;
     }
 
@@ -694,7 +659,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     event.preventDefault();
     if (!editingParticipant || !selectedEvent) return;
     if (!selectedEventUnlocked) {
-      setParticipantNotice("행사 관리 비밀번호를 먼저 입력해 주세요.");
+      setParticipantNotice("이 행사를 관리할 권한이 없습니다.");
       return;
     }
 
@@ -796,7 +761,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   const handleConfirmImport = async () => {
     if (!selectedEvent) return;
     if (!selectedEventUnlocked) {
-      setParticipantNotice("행사 관리 비밀번호를 먼저 입력해 주세요.");
+      setParticipantNotice("이 행사를 관리할 권한이 없습니다.");
       return;
     }
     if (importPreviewRows.length === 0) {
@@ -843,20 +808,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     }
   };
 
-  const handleUnlockSelectedEvent = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedEvent) return;
-
-    if (await authService.signInToEvent(selectedEvent, selectedEventPassword)) {
-      setUnlockedEventIds((current) => new Set([...current, selectedEvent.id]));
-      setSelectedEventPassword("");
-      setSelectedEventPasswordError("");
-      return;
-    }
-
-    setSelectedEventPasswordError("행사 관리 비밀번호가 올바르지 않습니다.");
-  };
-
   const handleLogout = () => {
     if (isTeacherMode) {
       authService.signOutTeacher();
@@ -866,8 +817,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     setUnlockedEventIds(new Set());
     setEditingEventId(null);
     setEventForm(emptyEventForm);
-    setSelectedEventPassword("");
-    setSelectedEventPasswordError("");
     onLogout?.();
   };
 
@@ -1288,33 +1237,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                 type="datetime-local"
                 value={eventForm.registrationDeadline}
                 onChange={(event) => setEventForm((form) => ({ ...form, registrationDeadline: event.target.value }))}
-              />
-            </div>
-            <div className="lg:col-span-4">
-              <label className="field-label" htmlFor="event-admin-password">
-                {editingEventId ? "새 관리 비밀번호" : "관리 비밀번호 *"}
-              </label>
-              <input
-                id="event-admin-password"
-                className="field-input"
-                type="password"
-                value={eventForm.adminPassword}
-                onChange={(event) => setEventForm((form) => ({ ...form, adminPassword: event.target.value }))}
-                autoComplete="new-password"
-                placeholder={editingEventId ? "변경할 때만 입력" : "등록부 관리용 비밀번호"}
-              />
-            </div>
-            <div className="lg:col-span-4">
-              <label className="field-label" htmlFor="event-admin-password-confirm">
-                {editingEventId ? "새 비밀번호 확인" : "비밀번호 확인 *"}
-              </label>
-              <input
-                id="event-admin-password-confirm"
-                className="field-input"
-                type="password"
-                value={eventForm.adminPasswordConfirm}
-                onChange={(event) => setEventForm((form) => ({ ...form, adminPasswordConfirm: event.target.value }))}
-                autoComplete="new-password"
               />
             </div>
             <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 lg:col-span-12">
@@ -1984,21 +1906,16 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
           </section>
         ) : (
           <section className="rounded-lg border border-ink-200 bg-white p-6">
-            <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-start">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                <Lock size={22} aria-hidden="true" />
+              </div>
               <div>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
-                    <Lock size={22} aria-hidden="true" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-school-700">행사 관리 잠금</p>
-                    <h2 className="mt-1 text-xl font-semibold text-ink-900">{selectedEvent.title}</h2>
-                    <p className="mt-1 text-sm leading-6 text-ink-600">
-                      참가자 명단, 엑셀 다운로드, 출석부 인쇄, 행사 수정은 이 행사를 만들 때 등록한 관리 비밀번호를 입력한 뒤 사용할 수 있습니다.
-                    </p>
-                  </div>
-                </div>
-
+                <p className="text-sm font-semibold text-school-700">행사 관리 권한 필요</p>
+                <h2 className="mt-1 text-xl font-semibold text-ink-900">{selectedEvent.title}</h2>
+                <p className="mt-1 text-sm leading-6 text-ink-600">
+                  참가자 명단, 엑셀 다운로드, 출석부 인쇄, 행사 수정은 학교 관리자 또는 이 행사의 담당 교사만 사용할 수 있습니다.
+                </p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <button className="btn-secondary" type="button" onClick={() => copyText(getPublicEventUrl(selectedEvent.id))}>
                     <LinkIcon size={18} aria-hidden="true" />
@@ -2010,24 +1927,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                   </button>
                 </div>
               </div>
-
-              <form className="rounded-lg border border-ink-200 bg-ink-50 p-4" onSubmit={handleUnlockSelectedEvent}>
-                <label>
-                  <span className="field-label">관리 비밀번호</span>
-                  <input
-                    className="field-input bg-white"
-                    type="password"
-                    value={selectedEventPassword}
-                    onChange={(event) => setSelectedEventPassword(event.target.value)}
-                    autoComplete="current-password"
-                  />
-                </label>
-                {selectedEventPasswordError ? <p className="mt-3 text-sm font-medium text-red-600">{selectedEventPasswordError}</p> : null}
-                <button className="btn-primary mt-4 w-full" type="submit">
-                  <Check size={18} aria-hidden="true" />
-                  등록부 관리 열기
-                </button>
-              </form>
             </div>
           </section>
         ) : (

@@ -16,8 +16,8 @@ interface EventPasswordGateProps {
 export function EventPasswordGate({
   eventId,
   children,
-  title = "행사 관리 비밀번호 확인",
-  description = "이 행사 등록부를 보려면 행사 생성 시 등록한 관리 비밀번호를 입력해 주세요.",
+  title = "등록부 접근 권한 확인",
+  description = "이 행사 등록부는 학교 관리자 또는 해당 행사 담당 교사로 로그인한 뒤 열 수 있습니다.",
 }: EventPasswordGateProps) {
   const [event, setEvent] = useState<Event | undefined>();
   const [loading, setLoading] = useState(true);
@@ -52,6 +52,10 @@ export function EventPasswordGate({
   const handleSubmit = async (submitEvent: FormEvent) => {
     submitEvent.preventDefault();
     if (!event) return;
+    if (!event.adminPasswordHash) {
+      setError("관리자 또는 담당 교사로 로그인해 주세요.");
+      return;
+    }
 
     if (await authService.signInToEvent(event, password)) {
       setUnlocked(true);
@@ -59,7 +63,7 @@ export function EventPasswordGate({
       return;
     }
 
-    setError("행사 관리 비밀번호가 올바르지 않습니다.");
+    setError("관리 비밀번호가 올바르지 않습니다.");
   };
 
   if (loading) {
@@ -88,6 +92,36 @@ export function EventPasswordGate({
 
   if (unlocked) return <>{children}</>;
 
+  if (!event.adminPasswordHash) {
+    return (
+      <main className="min-h-screen bg-ink-50 px-4 py-10">
+        <section className="mx-auto flex min-h-[75vh] max-w-md items-center">
+          <div className="w-full rounded-lg border border-ink-200 bg-white p-6 shadow-soft">
+            <div className="mb-5 flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-school-50 text-school-700">
+                <Lock size={22} aria-hidden="true" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold text-ink-900">{title}</h1>
+                <p className="mt-1 text-sm leading-6 text-ink-500">{description}</p>
+                <p className="mt-2 text-sm font-medium text-ink-700">{event.title}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Link className="btn-primary justify-center" to="/user">
+                담당 교사 로그인
+              </Link>
+              <Link className="btn-secondary justify-center" to="/admin">
+                관리자 로그인
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-ink-50 px-4 py-10">
       <section className="mx-auto flex min-h-[75vh] max-w-md items-center">
@@ -104,7 +138,7 @@ export function EventPasswordGate({
           </div>
 
           <label className="field-label" htmlFor="event-password">
-            관리 비밀번호
+            이전 방식 관리 비밀번호
           </label>
           <input
             id="event-password"

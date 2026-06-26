@@ -90,7 +90,10 @@ function PublicRegistrationPage() {
         <section className="max-w-md rounded-lg border border-ink-200 bg-white p-6 text-center shadow-soft">
           <AlertCircle className="mx-auto text-red-600" size={36} aria-hidden="true" />
           <h1 className="mt-3 text-xl font-semibold text-ink-900">행사를 찾을 수 없습니다</h1>
-          <p className="mt-2 text-sm text-ink-500">등록 링크 주소를 다시 확인해 주세요.</p>
+          <p className="mt-2 text-sm leading-6 text-ink-500">
+            등록 링크 주소가 맞더라도 현재 테스트 저장소는 기기별로 저장됩니다. PC에서 만든 행사는 휴대폰에 자동으로 공유되지 않으므로,
+            실제 QR 운영 전에는 Supabase 연결이 필요합니다.
+          </p>
         </section>
       </main>
     );
