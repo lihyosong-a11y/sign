@@ -1,13 +1,24 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
+import { AdminAuthGate } from "./components/AdminAuthGate";
 import AdminPage from "./pages/AdminPage";
 import AttendancePrintPage from "./pages/AttendancePrintPage";
+import HomePage from "./pages/HomePage";
 import PublicRegistrationPage from "./pages/PublicRegistrationPage";
+import UserPage from "./pages/UserPage";
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/admin" replace />} />
-      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/" element={<HomePage />} />
+      <Route path="/user" element={<UserPage />} />
+      <Route
+        path="/admin"
+        element={
+          <AdminAuthGate title="관리자 로그인" description="행사 생성과 등록부 관리를 위해 관리자 비밀번호를 입력해 주세요.">
+            <AdminPage />
+          </AdminAuthGate>
+        }
+      />
       <Route path="/event/:eventId" element={<PublicRegistrationPage />} />
       <Route path="/event/:eventId/attendance" element={<AttendancePrintPage />} />
       <Route

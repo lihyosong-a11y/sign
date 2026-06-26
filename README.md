@@ -24,7 +24,9 @@ VITE_SUPABASE_PUBLISHABLE_KEY=새_Supabase_프로젝트의_publishable_key
 
 ## 화면 주소
 
-- 관리자 화면: `/admin`
+- 메인 화면: `/`
+- 사용자 화면: `/user`
+- 관리자 로그인 및 관리 화면: `/admin`
 - 공개 참가자 등록: `/event/{행사ID}`
 - 행사별 출석부 인쇄: `/event/{행사ID}/attendance`
 

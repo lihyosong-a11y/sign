@@ -718,7 +718,7 @@ function AdminDashboard() {
             </button>
             <button className="btn-secondary" type="button" onClick={handleLogout}>
               <LogOut size={18} aria-hidden="true" />
-              열린 행사 잠금
+              로그아웃
             </button>
           </div>
         </div>
