@@ -1,8 +1,10 @@
 import type { Event, TeacherUser } from "../types";
 import { readDatabase } from "./localDatabase";
+import { userService } from "./userService";
 
 const ADMIN_SESSION_KEY = "teacher-event-admin-authenticated";
 const TEACHER_SESSION_KEY = "teacher-event-teacher-user-id";
+const TEACHER_SESSION_USER_KEY = "teacher-event-teacher-user";
 const EVENT_SESSION_PREFIX = "teacher-event-admin-event:";
 const AUTH_SESSION_CHANGE_EVENT = "teacher-event-auth-session-change";
 const normalizeUsername = (username: string) => username.trim().toLowerCase();
@@ -53,6 +55,16 @@ export const authService = {
     const userId = this.getCurrentTeacherUserId();
     if (!userId) return null;
 
+    const cachedUser = sessionStorage.getItem(TEACHER_SESSION_USER_KEY);
+    if (cachedUser) {
+      try {
+        const user = JSON.parse(cachedUser) as TeacherUser;
+        if (user.id === userId && user.active) return user;
+      } catch {
+        sessionStorage.removeItem(TEACHER_SESSION_USER_KEY);
+      }
+    }
+
     const user = readDatabase().users.find((item) => item.id === userId && item.active);
     return user ?? null;
   },
@@ -60,12 +72,11 @@ export const authService = {
   async signInTeacher(username: string, password: string) {
     const normalizedUsername = normalizeUsername(username);
     const passwordHash = localHashPassword(password.trim());
-    const user = readDatabase().users.find(
-      (item) => item.active && item.username === normalizedUsername && item.passwordHash === passwordHash,
-    );
+    const user = await userService.getTeacherUserByUsername(normalizedUsername);
 
-    if (user) {
+    if (user?.active && user.passwordHash === passwordHash) {
       sessionStorage.setItem(TEACHER_SESSION_KEY, user.id);
+      sessionStorage.setItem(TEACHER_SESSION_USER_KEY, JSON.stringify(user));
       notifyAuthSessionChange();
       return user;
     }
@@ -103,6 +114,7 @@ export const authService = {
 
   signOutTeacher() {
     sessionStorage.removeItem(TEACHER_SESSION_KEY);
+    sessionStorage.removeItem(TEACHER_SESSION_USER_KEY);
     Object.keys(sessionStorage)
       .filter((key) => key.startsWith(EVENT_SESSION_PREFIX))
       .forEach((key) => sessionStorage.removeItem(key));
@@ -112,6 +124,7 @@ export const authService = {
   signOut() {
     sessionStorage.removeItem(ADMIN_SESSION_KEY);
     sessionStorage.removeItem(TEACHER_SESSION_KEY);
+    sessionStorage.removeItem(TEACHER_SESSION_USER_KEY);
     Object.keys(sessionStorage)
       .filter((key) => key.startsWith(EVENT_SESSION_PREFIX))
       .forEach((key) => sessionStorage.removeItem(key));

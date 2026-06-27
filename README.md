@@ -34,20 +34,22 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_jTm6215Zy07ql-q9d2iJQw_vGURBCxS
 
 QR 코드는 `VITE_PUBLIC_APP_URL`이 있으면 해당 주소를 기준으로 생성합니다. Vercel 배포 후에는 이 값을 실제 배포 주소로 등록하세요. 로컬 개발 주소인 `localhost`나 `127.0.0.1`로 만든 QR은 휴대폰에서 접속되지 않을 수 있습니다.
 
-현재 localStorage 테스트 저장소에서는 행사와 참가자 데이터가 브라우저 기기별로 따로 저장됩니다. 따라서 PC에서 만든 행사 QR을 휴대폰으로 열면 주소가 맞아도 휴대폰에는 해당 행사 데이터가 없어 보이지 않을 수 있습니다. 여러 기기에서 같은 QR 등록 링크를 사용하려면 Supabase 같은 서버 저장소 연결이 필요합니다.
+Supabase 환경 변수와 테이블이 준비되면 행사, 참가자, 담당 교사 계정은 Supabase에 저장됩니다. 이 상태에서는 PC에서 만든 행사 QR을 휴대폰으로 열어도 같은 서버 데이터를 조회합니다. Supabase 테이블이 아직 없거나 연결에 실패하면 기존 `localStorage` 테스트 저장소로 대체됩니다.
 
 ## 데이터 저장 구조
 
-현재 실행 버전은 `localStorage` 기반 테스트 저장소를 사용합니다. 단, 컴포넌트가 `localStorage`를 직접 사용하지 않도록 저장 로직을 서비스 파일로 분리했습니다.
+현재 실행 버전은 Supabase 환경 변수가 있으면 Supabase를 우선 사용하고, 연결되지 않았을 때만 `localStorage` 테스트 저장소를 사용합니다. 컴포넌트가 저장 방식에 직접 의존하지 않도록 저장 로직은 서비스 파일로 분리했습니다.
 
 - 행사 데이터: `src/services/eventService.ts`
 - 참가자 데이터: `src/services/participantService.ts`
 - 담당 교사 계정 데이터: `src/services/userService.ts`
 - 임시 관리자 및 담당 교사 인증: `src/services/authService.ts`
 - localStorage 내부 구현: `src/services/localDatabase.ts`
-- Supabase 클라이언트 준비: `src/services/supabaseClient.ts`
+- Supabase 클라이언트: `src/services/supabaseClient.ts`
+- Supabase 타입/컬럼 매핑: `src/services/supabaseDatabase.ts`
+- Supabase 테이블 SQL: `supabase/schema.sql`
 
-추후 Supabase로 전환할 때는 주로 `eventService.ts`, `participantService.ts`, `userService.ts`, `authService.ts`를 Supabase 쿼리와 Supabase Auth 또는 행사별 권한 검증 호출로 교체하면 됩니다.
+추후 Supabase Auth와 더 엄격한 권한 구조로 전환할 때는 주로 `authService.ts`, `userService.ts`, `supabase/schema.sql`의 인증 및 RLS 정책을 교체하면 됩니다.
 
 ## 타입 구조
 
@@ -95,18 +97,36 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_jTm6215Zy07ql-q9d2iJQw_vGURBCxS
 React Router 새로고침 문제가 생기지 않도록 `vercel.json`에 모든 경로를 `index.html`로 rewrite하는 설정을 포함했습니다.
 `VITE_PUBLIC_APP_URL`에 `/teacher`처럼 하위 경로가 포함되면 앱 라우터도 해당 경로를 기준으로 동작합니다.
 
+환경 변수를 새로 등록하거나 수정한 뒤에는 Vercel의 Deployments에서 최신 배포를 Redeploy해야 배포 앱에 값이 반영됩니다.
+
+## Supabase 테이블 만들기
+
+1. Supabase 프로젝트 대시보드로 이동합니다.
+2. 왼쪽 메뉴에서 SQL Editor를 엽니다.
+3. `supabase/schema.sql` 내용을 복사해 붙여 넣고 Run을 누릅니다.
+4. Vercel에 등록한 환경 변수와 같은 값이 `.env.local` 또는 Vercel Environment Variables에 들어 있는지 확인합니다.
+5. Vercel에서 Redeploy합니다.
+
+테이블 생성 후 확인 순서:
+
+1. `/admin`에서 관리자 로그인
+2. 담당 교사 계정 생성
+3. `/user`에서 담당 교사 로그인
+4. 행사 생성
+5. QR 또는 공개 링크를 휴대폰에서 열어 등록
+6. PC 관리자/담당자 화면에서 참가자가 보이는지 확인
+
 ## Supabase 연결 시 주의
 
 프런트엔드에는 Supabase publishable key만 넣습니다. `service_role key`, secret key, 데이터베이스 비밀번호는 프런트엔드 코드, `.env.example`, GitHub, Vercel의 공개 환경 변수에 절대 넣지 마세요.
 
-실제 운영 전에는 다음 설정이 필요합니다.
+현재 `supabase/schema.sql`의 RLS 정책은 프런트엔드 전용 프로토타입이 바로 작동하도록 열려 있습니다. 실제 개인정보 운영 전에는 다음 설정이 필요합니다.
 
-- Supabase 테이블 생성: `events`, `participants`
-- Supabase 테이블 생성: `teacher_users` 또는 Supabase Auth 사용자 프로필
 - Supabase Auth 기반 관리자 및 담당 교사 로그인
 - 행사별 소유자 계정 연결
-- Row Level Security 정책
+- 행사별 권한을 확인하는 더 엄격한 Row Level Security 정책
 - 공개 등록 insert 권한과 관리자 조회/수정/삭제 권한 분리
+- 비밀번호 해시를 프런트엔드에서 직접 다루지 않는 서버 측 로그인 처리
 - HTTPS 환경에서 운영
 - 개인정보 수집 및 이용 안내문, 보관 기간, 삭제 정책 작성
 
