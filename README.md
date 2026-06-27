@@ -17,7 +17,7 @@ npm run dev
 VITE_ADMIN_PASSWORD=원하는_관리자_비밀번호
 VITE_PUBLIC_APP_URL=https://exam-seven-chi.vercel.app/teacher
 VITE_SUPABASE_URL=https://otlmlgguzosyxacaggah.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=새_Supabase_프로젝트의_publishable_key
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_jTm6215Zy07ql-q9d2iJQw_vGURBCxS
 ```
 
 `.env.local`은 `.gitignore`에 포함되어 GitHub에 올라가지 않습니다.
@@ -89,7 +89,7 @@ git push -u origin main
 VITE_ADMIN_PASSWORD=원하는_관리자_비밀번호
 VITE_PUBLIC_APP_URL=https://exam-seven-chi.vercel.app/teacher
 VITE_SUPABASE_URL=https://otlmlgguzosyxacaggah.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=새_Supabase_프로젝트의_publishable_key
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_jTm6215Zy07ql-q9d2iJQw_vGURBCxS
 ```
 
 React Router 새로고침 문제가 생기지 않도록 `vercel.json`에 모든 경로를 `index.html`로 rewrite하는 설정을 포함했습니다.
