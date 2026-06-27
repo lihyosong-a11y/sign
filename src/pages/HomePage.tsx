@@ -1,60 +1,28 @@
 import { Link } from "react-router-dom";
-import { ClipboardList, Lock, QrCode, UserRoundCheck } from "lucide-react";
+import { Lock, UserRoundCheck } from "lucide-react";
 
 function HomePage() {
   return (
-    <main className="min-h-screen bg-ink-50">
-      <div className="mx-auto grid min-h-screen max-w-5xl content-center gap-6 px-4 py-10 sm:px-6">
-        <section className="rounded-lg border border-ink-200 bg-white p-6 shadow-soft sm:p-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-school-700">학교 행사 등록 및 출석 확인</p>
-              <h1 className="mt-2 text-3xl font-bold text-ink-900 sm:text-4xl">서명 등록부 만들기</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-600">
-                교사 연수, 회의, 워크숍의 참가 신청을 받고 행사 당일에는 QR 코드나 등록 링크로 서명을 받을 수 있습니다.
-              </p>
-            </div>
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-school-50 text-school-700">
-              <ClipboardList size={30} aria-hidden="true" />
-            </div>
-          </div>
+    <main className="flex min-h-screen flex-col bg-ink-50">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-8 px-5 py-10">
+        <section className="text-center">
+          <p className="text-sm font-semibold text-school-700">교사 행사 등록부</p>
+          <h1 className="mt-3 text-3xl font-bold text-ink-900">서명 등록부 만들기</h1>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2">
-          <Link className="rounded-lg border border-ink-200 bg-white p-5 shadow-soft transition hover:border-school-200 hover:bg-school-50" to="/admin">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
-                <Lock size={22} aria-hidden="true" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-ink-900">관리자 로그인</h2>
-                <p className="mt-1 text-sm leading-6 text-ink-600">담당 교사 계정을 발급하고 학교 전체 행사와 등록부를 관리합니다.</p>
-              </div>
-            </div>
+        <section className="grid gap-3">
+          <Link className="flex items-center justify-center gap-2 rounded-lg border border-ink-200 bg-white px-5 py-4 font-semibold text-ink-900 shadow-soft transition hover:border-school-200 hover:bg-school-50" to="/admin">
+            <Lock size={20} aria-hidden="true" />
+            관리자 로그인
           </Link>
 
-          <Link className="rounded-lg border border-ink-200 bg-white p-5 shadow-soft transition hover:border-school-200 hover:bg-school-50" to="/user">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-school-50 text-school-700">
-                <UserRoundCheck size={22} aria-hidden="true" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-ink-900">사용자 로그인</h2>
-                <p className="mt-1 text-sm leading-6 text-ink-600">학교 관리자가 발급한 계정으로 로그인해 본인의 행사 등록부를 만들고 수합합니다.</p>
-              </div>
-            </div>
+          <Link className="flex items-center justify-center gap-2 rounded-lg bg-school-600 px-5 py-4 font-semibold text-white shadow-soft transition hover:bg-school-700" to="/user">
+            <UserRoundCheck size={20} aria-hidden="true" />
+            담당자 로그인
           </Link>
-        </section>
-
-        <section className="rounded-lg border border-ink-200 bg-white p-5">
-          <div className="flex items-start gap-3">
-            <QrCode className="mt-0.5 shrink-0 text-school-700" size={22} aria-hidden="true" />
-            <p className="text-sm leading-6 text-ink-700">
-              참가자는 QR 코드를 스캔하면 해당 행사 등록 화면으로 바로 이동합니다. 사용자 로그인은 행사 등록부를 수합하는 담당 교사용입니다.
-            </p>
-          </div>
         </section>
       </div>
+      <footer className="pb-6 text-center text-sm font-medium text-ink-500">전남물리교육연구회</footer>
     </main>
   );
 }

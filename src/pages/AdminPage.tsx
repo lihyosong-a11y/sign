@@ -2,7 +2,6 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
 import {
-  CalendarDays,
   Check,
   ClipboardList,
   Copy,
@@ -33,7 +32,6 @@ import { participantService } from "../services/participantService";
 import { userService } from "../services/userService";
 import {
   ATTENDANCE_TYPES,
-  EVENT_CATEGORIES,
   attendanceStatusLabels,
   defaultPublicRegistrationSettings,
   registrationSourceLabels,
@@ -43,7 +41,6 @@ import {
   type Event,
   type Participant,
   type ParticipantDraft,
-  type PublicRegistrationMode,
   type PublicRegistrationSettings,
   type RegistrationSource,
   type TeacherUser,
@@ -106,11 +103,11 @@ type AdminDashboardProps = {
   onLogout?: () => void;
 };
 
-type DashboardTab = "teachers" | "events" | "participants";
+type DashboardTab = "teachers" | "events" | "eventForm" | "participants";
 
 const emptyEventForm: EventFormState = {
   title: "",
-  category: "연수",
+  category: "행사",
   eventDate: "",
   location: "",
   managerName: "",
@@ -118,7 +115,7 @@ const emptyEventForm: EventFormState = {
   capacity: "",
   isPublicRegistrationOpen: true,
   registrationDeadline: "",
-  publicRegistrationSettings: { ...defaultPublicRegistrationSettings },
+  publicRegistrationSettings: { ...defaultPublicRegistrationSettings, mode: "both" },
 };
 
 const emptyParticipantForm: ParticipantDraft = {
@@ -156,12 +153,6 @@ const statusBadgeClass: Record<AttendanceStatus, string> = {
   예정: "bg-amber-50 text-amber-700",
   참석: "bg-school-50 text-school-700",
   미참석: "bg-red-50 text-red-700",
-};
-
-const registrationModeLabels: Record<PublicRegistrationMode, string> = {
-  new: "새 참가자 직접 등록",
-  pre_registered_signature: "사전 명단 선택 후 서명만",
-  both: "둘 다 허용",
 };
 
 const getPublicStatus = (event: Event) => {
@@ -398,6 +389,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
 
     const publicRegistrationSettings: PublicRegistrationSettings = {
       ...eventForm.publicRegistrationSettings,
+      mode: "both",
       requirePhone: eventForm.publicRegistrationSettings.collectPhone,
       requireEmail: eventForm.publicRegistrationSettings.collectEmail,
     };
@@ -440,7 +432,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     }
 
     setEditingEventId(event.id);
-    setActiveTab("events");
+    setActiveTab("eventForm");
     setEventForm({
       title: event.title,
       category: event.category,
@@ -454,6 +446,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       publicRegistrationSettings: {
         ...defaultPublicRegistrationSettings,
         ...event.publicRegistrationSettings,
+        mode: "both",
       },
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -832,25 +825,22 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     link.remove();
   };
 
-  const dashboardTabs: Array<{ id: DashboardTab; label: string; description: string }> = [
+  const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
     ...(isAdminMode
       ? [
           {
             id: "teachers" as const,
-            label: "담당 교사 계정",
-            description: `${teacherUsers.length}명`,
+            label: "교사 계정관리",
           },
         ]
       : []),
     {
       id: "events",
       label: "행사 관리",
-      description: `${events.length}건`,
     },
     {
-      id: "participants",
-      label: "참가자 관리",
-      description: selectedEvent ? selectedEvent.title : "행사 선택",
+      id: "eventForm",
+      label: "행사 등록",
     },
   ];
 
@@ -859,10 +849,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       <header className="border-b border-ink-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
-            <p className="text-sm font-semibold text-school-700">{isTeacherMode ? "행사 담당자 화면" : "학교 관리자 화면"}</p>
-            <h1 className="mt-1 text-2xl font-bold text-ink-900">
-              {isTeacherMode ? "내 행사 등록부 관리" : "교사 행사 등록 및 출석부 관리"}
-            </h1>
+            <h1 className="text-2xl font-bold text-ink-900">{isTeacherMode ? "담당자" : "관리자"}</h1>
             {teacherUser ? (
               <p className="mt-1 text-sm text-ink-500">
                 {teacherUser.name}
@@ -886,44 +873,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <section className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-ink-200 bg-white p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-school-50 text-school-700">
-                <CalendarDays size={20} aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-ink-500">{isTeacherMode ? "내 행사" : "등록된 행사"}</p>
-                <p className="text-2xl font-semibold text-ink-900">{events.length}건</p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg border border-ink-200 bg-white p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-sky-50 text-sky-700">
-                <Users size={20} aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-ink-500">{isTeacherMode ? "내 행사 등록 인원" : "전체 등록 인원"}</p>
-                <p className="text-2xl font-semibold text-ink-900">{allParticipants.length}명</p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg border border-ink-200 bg-white p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-amber-50 text-amber-700">
-                <UserCheck size={20} aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm text-ink-500">선택 행사 대면 예정</p>
-                <p className="text-2xl font-semibold text-ink-900">{faceToFaceCount}명</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <nav className="rounded-lg border border-ink-200 bg-white p-2 shadow-soft" aria-label="관리 화면 탭">
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className={`grid gap-2 ${isAdminMode ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
             {dashboardTabs.map((tab) => {
               const selected = activeTab === tab.id;
 
@@ -940,7 +891,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                   aria-current={selected ? "page" : undefined}
                 >
                   <span className="block text-sm font-semibold">{tab.label}</span>
-                  <span className="mt-1 block truncate text-xs text-ink-500">{tab.description}</span>
                 </button>
               );
             })}
@@ -951,8 +901,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
           <section className="rounded-lg border border-ink-200 bg-white p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-ink-900">담당 교사 계정 관리</h2>
-                <p className="text-sm text-ink-500">행사 등록부를 수합할 선생님의 아이디와 비밀번호를 발급합니다.</p>
+                <h2 className="text-lg font-semibold text-ink-900">교사 계정관리</h2>
               </div>
               {editingTeacherId ? (
                 <button className="btn-secondary" type="button" onClick={resetTeacherForm}>
@@ -1104,13 +1053,12 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
           </section>
         ) : null}
 
-        {activeTab === "events" ? (
+        {activeTab === "eventForm" ? (
           <div className="grid gap-6">
         <section className="rounded-lg border border-ink-200 bg-white p-5">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-ink-900">{editingEventId ? "행사 수정" : "새 행사 등록"}</h2>
-              <p className="text-sm text-ink-500">행사 정보를 저장하면 공개 등록 링크와 출석부 주소가 자동으로 준비됩니다.</p>
             </div>
             {editingEventId ? (
               <button
@@ -1129,7 +1077,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
           </div>
 
           <form className="grid gap-4 lg:grid-cols-12" onSubmit={handleEventSubmit}>
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-8">
               <label className="field-label" htmlFor="event-title">
                 행사명 *
               </label>
@@ -1140,23 +1088,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                 onChange={(event) => setEventForm((form) => ({ ...form, title: event.target.value }))}
                 placeholder="예: AI 활용 수업 연수"
               />
-            </div>
-            <div className="lg:col-span-3">
-              <label className="field-label" htmlFor="event-category">
-                행사 구분
-              </label>
-              <select
-                id="event-category"
-                className="field-input"
-                value={eventForm.category}
-                onChange={(event) => setEventForm((form) => ({ ...form, category: event.target.value as EventCategory }))}
-              >
-                {EVENT_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
             </div>
             <div className="lg:col-span-4">
               <label className="field-label" htmlFor="event-start-at">
@@ -1240,27 +1171,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
               />
             </div>
             <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 lg:col-span-12">
-              <div className="grid gap-4 lg:grid-cols-[minmax(220px,320px)_1fr]">
-                <label>
-                  <span className="field-label">공개 등록 방식</span>
-                  <select
-                    className="field-input bg-white"
-                    value={eventForm.publicRegistrationSettings.mode}
-                    onChange={(event) =>
-                      updatePublicRegistrationSettings({
-                        mode: event.target.value as PublicRegistrationMode,
-                      })
-                    }
-                  >
-                    {Object.entries(registrationModeLabels).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div>
-                  <p className="field-label">새 참가자 등록 시 받을 항목</p>
+              <div>
+                  <p className="field-label">공개 등록 항목</p>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
                       <input
@@ -1299,10 +1211,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                       요청 사항 받기
                     </label>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-ink-600">
-                    선택한 입력 항목은 공개 등록에서 필수 항목으로 표시됩니다. 사전 명단 서명 방식은 관리자가 등록하거나 업로드한 참가자가 공개 링크에서 본인을 선택하고 서명만 남기는 흐름입니다.
-                  </p>
-                </div>
               </div>
             </div>
             <div className="lg:col-span-8">
@@ -1326,12 +1234,14 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
             {eventError ? <p className="font-medium text-red-600 lg:col-span-12">{eventError}</p> : null}
           </form>
         </section>
+          </div>
+        ) : null}
 
+        {activeTab === "events" ? (
         <section className="rounded-lg border border-ink-200 bg-white">
           <div className="flex flex-col gap-2 border-b border-ink-200 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-ink-900">행사 목록</h2>
-              <p className="text-sm text-ink-500">행사별 신청 현황과 관리 기능을 확인합니다.</p>
             </div>
           </div>
 
@@ -1349,11 +1259,11 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
               </thead>
               <tbody className="divide-y divide-ink-100">
                 {events.length === 0 ? (
-                  <tr>
-                    <td className="px-5 py-8 text-center text-sm text-ink-500" colSpan={6}>
-                      등록된 행사가 없습니다.
-                    </td>
-                  </tr>
+                    <tr>
+                      <td className="px-5 py-8 text-center text-sm text-ink-500" colSpan={6}>
+                      행사가 없습니다.
+                      </td>
+                    </tr>
                 ) : (
                   events.map((event) => {
                     const publicStatus = getPublicStatus(event);
@@ -1362,10 +1272,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                     return (
                       <tr key={event.id} className={selectedEventId === event.id ? "bg-school-50/50" : "bg-white"}>
                         <td className="table-cell">
-                          <div>
-                            <p className="font-semibold text-ink-900">{event.title}</p>
-                            <p className="text-xs text-ink-500">{event.category}</p>
-                          </div>
+                          <p className="font-semibold text-ink-900">{event.title}</p>
                         </td>
                         <td className="table-cell text-ink-700">{formatDateTime(event.eventDate)}</td>
                         <td className="table-cell text-ink-700">{event.location || "-"}</td>
@@ -1418,8 +1325,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
             </table>
           </div>
         </section>
-
-          </div>
         ) : null}
 
         {activeTab === "participants" ? (
@@ -1437,6 +1342,9 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <button className="btn-secondary" type="button" onClick={() => setActiveTab("events")}>
+                    행사 목록
+                  </button>
                   <button className="btn-secondary" type="button" onClick={() => copyText(getPublicEventUrl(selectedEvent.id))}>
                     <LinkIcon size={18} aria-hidden="true" />
                     공개 등록 링크 복사
