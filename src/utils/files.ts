@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
-import type { AttendanceType, Event, Participant, ParticipantDraft } from "../types";
+import type { Event, Participant, ParticipantDraft } from "../types";
 import { attendanceStatusLabels, registrationSourceLabels } from "../types";
-import { formatDateTime, isValidPhone } from "./format";
+import { formatDateTime } from "./format";
 
 export interface ImportParticipantRow extends ParticipantDraft {
   rowNumber: number;
@@ -11,9 +11,10 @@ export interface ImportParticipantRow extends ParticipantDraft {
 const headerCandidates: Record<keyof ParticipantDraft, string[]> = {
   name: ["성명", "이름", "name"],
   organization: ["소속", "소속 학교 또는 부서", "학교", "부서", "organization"],
-  phone: ["연락처", "전화번호", "phone"],
-  email: ["이메일", "email"],
-  attendanceType: ["참석 형태", "참석형태", "mode"],
+  position: ["직위", "직급", "position"],
+  phone: [],
+  email: [],
+  attendanceType: [],
   note: ["비고", "기타", "note"],
   signatureDataUrl: [],
 };
@@ -21,12 +22,6 @@ const headerCandidates: Record<keyof ParticipantDraft, string[]> = {
 const getCell = (row: Record<string, unknown>, field: keyof ParticipantDraft) => {
   const key = headerCandidates[field].find((candidate) => candidate in row);
   return key ? String(row[key] ?? "").trim() : "";
-};
-
-const normalizeAttendanceMode = (value: string): AttendanceType => {
-  if (value.includes("온라인")) return "온라인";
-  if (value.includes("대면")) return "대면";
-  return "미정";
 };
 
 const parseCsvText = (text: string) => {
@@ -120,22 +115,22 @@ export const parseParticipantFile = async (file: File): Promise<ImportParticipan
   }
 
   return rows.map((row, index) => {
+    const note = getCell(row, "note");
     const parsed: ImportParticipantRow = {
       rowNumber: index + 2,
       name: getCell(row, "name"),
       organization: getCell(row, "organization"),
-      phone: getCell(row, "phone"),
-      email: getCell(row, "email"),
-      attendanceType: normalizeAttendanceMode(getCell(row, "attendanceType")),
-      note: getCell(row, "note"),
+      position: getCell(row, "position"),
+      phone: "",
+      email: "",
+      attendanceType: note.includes("온라인") ? "온라인" : "대면",
+      note,
       errors: [],
     };
 
     if (!parsed.name) parsed.errors.push("성명 누락");
     if (!parsed.organization) parsed.errors.push("소속 누락");
-    if (parsed.phone && !isValidPhone(parsed.phone)) {
-      parsed.errors.push("연락처 형식 확인");
-    }
+    if (!parsed.position) parsed.errors.push("직위 누락");
 
     return parsed;
   });
@@ -158,11 +153,12 @@ export const downloadParticipantTemplate = async () => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("참가자 업로드 양식");
   worksheet.addRows([
-    ["성명", "소속", "연락처", "이메일", "참석 형태", "비고"],
-    ["홍길동", "새빛초등학교", "", "", "대면", "연락처와 이메일은 필요한 경우만 입력"],
+    ["성명", "소속", "직위", "비고"],
+    ["홍길동", "새빛초등학교", "교사", ""],
+    ["김온라인", "새빛초등학교", "교사", "온라인"],
   ]);
   worksheet.getRow(1).font = { bold: true };
-  worksheet.columns = [{ width: 14 }, { width: 22 }, { width: 18 }, { width: 24 }, { width: 14 }, { width: 28 }];
+  worksheet.columns = [{ width: 14 }, { width: 24 }, { width: 14 }, { width: 28 }];
 
   const buffer = await workbook.xlsx.writeBuffer();
   downloadBlob(
@@ -179,11 +175,9 @@ export const downloadParticipantsExcel = async (event: Event, participants: Part
 
   worksheet.columns = [
     { header: "번호", key: "index", width: 8 },
-    { header: "성명", key: "name", width: 14 },
     { header: "소속", key: "organization", width: 24 },
-    { header: "연락처", key: "phone", width: 18 },
-    { header: "이메일", key: "email", width: 28 },
-    { header: "참석 형태", key: "attendanceType", width: 14 },
+    { header: "직위", key: "position", width: 14 },
+    { header: "성명", key: "name", width: 14 },
     { header: "등록 경로", key: "source", width: 18 },
     { header: "등록 시각", key: "createdAt", width: 24 },
     { header: "참석 확인 여부", key: "attendanceStatus", width: 16 },
@@ -195,16 +189,14 @@ export const downloadParticipantsExcel = async (event: Event, participants: Part
   participants.forEach((participant, index) => {
     worksheet.addRow({
       index: index + 1,
-      name: participant.name,
       organization: participant.organization,
-      phone: participant.phone,
-      email: participant.email ?? "",
-      attendanceType: participant.attendanceType,
+      position: participant.position,
+      name: participant.name,
       source: registrationSourceLabels[participant.registrationSource],
       createdAt: formatDateTime(participant.createdAt),
       attendanceStatus: attendanceStatusLabels[participant.attendanceStatus],
       signed: participant.signed ? "서명 완료" : "미서명",
-      note: participant.note ?? "",
+      note: participant.attendanceType === "온라인" ? "온라인" : (participant.note ?? ""),
     });
   });
 

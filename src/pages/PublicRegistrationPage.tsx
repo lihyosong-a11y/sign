@@ -5,9 +5,7 @@ import { SignatureInput } from "../components/SignatureInput";
 import { eventService } from "../services/eventService";
 import { participantService, type PublicSignatureCandidate } from "../services/participantService";
 import {
-  ATTENDANCE_TYPES,
   defaultPublicRegistrationSettings,
-  type AttendanceType,
   type Event,
   type Participant,
   type ParticipantDraft,
@@ -18,19 +16,17 @@ import {
   getEventStatusText,
   isCapacityFull,
   isDeadlinePassed,
-  isValidPhone,
 } from "../utils/format";
 
 const emptyForm: ParticipantDraft = {
   name: "",
   organization: "",
+  position: "",
   phone: "",
   email: "",
   attendanceType: "대면",
   note: "",
 };
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 function PublicRegistrationPage() {
   const { eventId } = useParams();
@@ -139,10 +135,7 @@ function PublicRegistrationPage() {
   const privacyFields = [
     "성명",
     "소속",
-    publicSettings.collectPhone ? "연락처" : "",
-    publicSettings.collectEmail ? "이메일" : "",
-    publicSettings.collectAttendanceType ? "참석 형태" : "",
-    publicSettings.collectNote ? "기타 요청 사항" : "",
+    "직위",
     "서명",
   ].filter(Boolean);
 
@@ -150,19 +143,7 @@ function PublicRegistrationPage() {
     const nextErrors: string[] = [];
     if (!form.name.trim()) nextErrors.push("성명을 입력해 주세요.");
     if (!form.organization.trim()) nextErrors.push("소속 학교 또는 부서를 입력해 주세요.");
-    if (publicSettings.collectPhone && !form.phone.trim()) {
-      nextErrors.push("연락처를 입력해 주세요.");
-    } else if (publicSettings.collectPhone && form.phone.trim() && !isValidPhone(form.phone)) {
-      nextErrors.push("연락처 형식을 확인해 주세요. 예: 010-1234-5678");
-    }
-    if (publicSettings.collectEmail && !form.email.trim()) {
-      nextErrors.push("이메일을 입력해 주세요.");
-    } else if (publicSettings.collectEmail && form.email.trim() && !isValidEmail(form.email)) {
-      nextErrors.push("이메일 형식을 확인해 주세요.");
-    }
-    if (publicSettings.collectNote && !form.note.trim()) {
-      nextErrors.push("기타 요청 사항을 입력해 주세요.");
-    }
+    if (!form.position.trim()) nextErrors.push("직위를 입력해 주세요.");
     if (!privacyAgreed) nextErrors.push("개인정보 수집 및 이용에 동의해 주세요.");
     if (!form.signatureDataUrl) nextErrors.push("서명을 입력하거나 서명 이미지를 업로드해 주세요.");
     return nextErrors;
@@ -187,23 +168,18 @@ function PublicRegistrationPage() {
     const normalized = {
       name: form.name.trim(),
       organization: form.organization.trim(),
-      phone: publicSettings.collectPhone ? form.phone.trim() : "",
-      email: publicSettings.collectEmail ? form.email.trim() : "",
-      attendanceType: publicSettings.collectAttendanceType ? form.attendanceType : "미정",
-      note: publicSettings.collectNote ? form.note.trim() : "",
+      position: form.position.trim(),
+      phone: "",
+      email: "",
+      attendanceType: "대면" as const,
+      note: "",
       signatureDataUrl: form.signatureDataUrl,
     };
 
-    const hasDuplicate = normalized.phone
-      ? await participantService.hasDuplicateInEvent(event.id, normalized.name, normalized.phone)
-      : await participantService.hasNameInEvent(event.id, normalized.name);
+    const hasDuplicate = await participantService.hasNameInEvent(event.id, normalized.name);
 
     if (hasDuplicate && !duplicateAcknowledged) {
-      setDuplicateWarning(
-        normalized.phone
-          ? "같은 이름과 연락처로 이미 등록된 내역이 있습니다. 본인 등록이 맞다면 한 번 더 등록 버튼을 눌러 주세요."
-          : "같은 이름으로 이미 등록된 내역이 있습니다. 본인 등록이 맞다면 한 번 더 등록 버튼을 눌러 주세요.",
-      );
+      setDuplicateWarning("같은 이름으로 이미 등록된 내역이 있습니다. 본인 등록이 맞다면 한 번 더 등록 버튼을 눌러 주세요.");
       setDuplicateAcknowledged(true);
       return;
     }
@@ -213,10 +189,11 @@ function PublicRegistrationPage() {
       eventId: event.id,
       name: normalized.name,
       organization: normalized.organization,
-      phone: normalized.phone,
-      email: normalized.email || undefined,
+      position: normalized.position,
+      phone: "",
+      email: undefined,
       attendanceType: normalized.attendanceType,
-      note: normalized.note || undefined,
+      note: undefined,
       registrationSource: "self",
       createdAt: new Date().toISOString(),
       attendanceStatus: "예정",
@@ -318,8 +295,8 @@ function PublicRegistrationPage() {
                       <dd className="mt-1 text-ink-900">{event.location || "장소 미정"}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-ink-700">참석 형태</dt>
-                      <dd className="mt-1 text-ink-900">{registeredParticipant.attendanceType}</dd>
+                      <dt className="font-semibold text-ink-700">직위</dt>
+                      <dd className="mt-1 text-ink-900">{registeredParticipant.position || "-"}</dd>
                     </div>
                   </dl>
                   <p className="mt-4 text-sm leading-6 text-ink-700">
@@ -379,7 +356,7 @@ function PublicRegistrationPage() {
                                 <option value="">이름을 선택해 주세요</option>
                                 {unsignedSignatureCandidates.map((candidate) => (
                                   <option key={candidate.id} value={candidate.id}>
-                                    {candidate.name} · {candidate.organization}
+                                    {candidate.organization} · {candidate.position || "-"} · {candidate.name}
                                   </option>
                                 ))}
                               </select>
@@ -387,7 +364,7 @@ function PublicRegistrationPage() {
 
                             {selectedSignatureCandidate ? (
                               <div className="rounded-md border border-school-100 bg-school-50 px-3 py-2 text-sm text-school-800">
-                                {selectedSignatureCandidate.name} / {selectedSignatureCandidate.organization} / {selectedSignatureCandidate.attendanceType}
+                                {selectedSignatureCandidate.organization} / {selectedSignatureCandidate.position || "-"} / {selectedSignatureCandidate.name}
                               </div>
                             ) : null}
 
@@ -403,7 +380,7 @@ function PublicRegistrationPage() {
                                 onChange={(event) => setPrivacyAgreed(event.target.checked)}
                               />
                               <span>
-                                출석 확인을 위해 성명, 소속, 서명 정보를 확인하고 행사 종료 후 관리 목적에 맞게 보관하는 것에 동의합니다.
+                                등록 확인을 위해 소속, 직위, 성명, 서명 정보를 확인하고 행사 종료 후 관리 목적에 맞게 보관하는 것에 동의합니다.
                               </span>
                             </label>
 
@@ -436,7 +413,23 @@ function PublicRegistrationPage() {
                         <div>
                           <h2 className="text-lg font-semibold text-ink-900">새 참가자 등록</h2>
                         </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <label>
+                            <span className="field-label">소속 *</span>
+                            <input
+                              className="field-input"
+                              value={form.organization}
+                              onChange={(event) => setForm((current) => ({ ...current, organization: event.target.value }))}
+                            />
+                          </label>
+                          <label>
+                            <span className="field-label">직위 *</span>
+                            <input
+                              className="field-input"
+                              value={form.position}
+                              onChange={(event) => setForm((current) => ({ ...current, position: event.target.value }))}
+                            />
+                          </label>
                           <label>
                             <span className="field-label">성명 *</span>
                             <input
@@ -448,73 +441,7 @@ function PublicRegistrationPage() {
                               }}
                             />
                           </label>
-                          <label>
-                            <span className="field-label">소속 학교 또는 부서 *</span>
-                            <input
-                              className="field-input"
-                              value={form.organization}
-                              onChange={(event) => setForm((current) => ({ ...current, organization: event.target.value }))}
-                            />
-                          </label>
                         </div>
-
-                        {publicSettings.collectPhone || publicSettings.collectEmail ? (
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            {publicSettings.collectPhone ? (
-                              <label>
-                                <span className="field-label">연락처 *</span>
-                                <input
-                                  className="field-input"
-                                  value={form.phone}
-                                  onChange={(event) => {
-                                    setForm((current) => ({ ...current, phone: event.target.value }));
-                                    setDuplicateAcknowledged(false);
-                                  }}
-                                  placeholder="010-1234-5678"
-                                />
-                              </label>
-                            ) : null}
-                            {publicSettings.collectEmail ? (
-                              <label>
-                                <span className="field-label">이메일 *</span>
-                                <input
-                                  className="field-input"
-                                  type="email"
-                                  value={form.email}
-                                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                                />
-                              </label>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        {publicSettings.collectAttendanceType ? (
-                          <label>
-                            <span className="field-label">참석 형태</span>
-                            <select
-                              className="field-input"
-                              value={form.attendanceType}
-                              onChange={(event) => setForm((current) => ({ ...current, attendanceType: event.target.value as AttendanceType }))}
-                            >
-                              {ATTENDANCE_TYPES.map((mode) => (
-                                <option key={mode} value={mode}>
-                                  {mode}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : null}
-
-                        {publicSettings.collectNote ? (
-                          <label>
-                            <span className="field-label">기타 요청 사항 *</span>
-                            <textarea
-                              className="field-input min-h-24 resize-y"
-                              value={form.note}
-                              onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
-                            />
-                          </label>
-                        ) : null}
 
                         <div className="rounded-lg border border-ink-200 bg-ink-50 p-4">
                           <SignatureInput
@@ -532,7 +459,7 @@ function PublicRegistrationPage() {
                             onChange={(event) => setPrivacyAgreed(event.target.checked)}
                           />
                           <span>
-                            행사 신청 및 출석 확인을 위해 {privacyFields.join(", ")} 정보를 수집하고 행사 종료 후 관리 목적에 맞게 보관하는 것에 동의합니다.
+                            행사 등록 확인을 위해 {privacyFields.join(", ")} 정보를 수집하고 행사 종료 후 관리 목적에 맞게 보관하는 것에 동의합니다.
                           </span>
                         </label>
 

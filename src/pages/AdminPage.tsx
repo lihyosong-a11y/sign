@@ -8,7 +8,6 @@ import {
   Download,
   Edit3,
   ExternalLink,
-  FileSpreadsheet,
   Link as LinkIcon,
   Lock,
   LogOut,
@@ -31,11 +30,9 @@ import { eventService } from "../services/eventService";
 import { participantService } from "../services/participantService";
 import { userService } from "../services/userService";
 import {
-  ATTENDANCE_TYPES,
   attendanceStatusLabels,
   defaultPublicRegistrationSettings,
   registrationSourceLabels,
-  type AttendanceType,
   type AttendanceStatus,
   type EventCategory,
   type Event,
@@ -53,7 +50,6 @@ import {
   getEventStatusText,
   getPublicEventUrl,
   isDeadlinePassed,
-  isValidPhone,
 } from "../utils/format";
 import {
   downloadParticipantTemplate,
@@ -78,7 +74,6 @@ type EventFormState = {
 type ParticipantFilter = {
   name: string;
   organization: string;
-  attendanceType: "전체" | AttendanceType;
   source: "전체" | RegistrationSource;
   attendanceStatus: "전체" | AttendanceStatus;
 };
@@ -96,6 +91,8 @@ type TeacherFormState = {
   passwordConfirm: string;
   active: boolean;
 };
+
+type EventRosterRow = ParticipantDraft;
 
 type AdminDashboardProps = {
   mode?: "admin" | "teacher";
@@ -121,6 +118,7 @@ const emptyEventForm: EventFormState = {
 const emptyParticipantForm: ParticipantDraft = {
   name: "",
   organization: "",
+  position: "",
   phone: "",
   email: "",
   attendanceType: "대면",
@@ -139,7 +137,6 @@ const emptyTeacherForm: TeacherFormState = {
 const emptyFilters: ParticipantFilter = {
   name: "",
   organization: "",
-  attendanceType: "전체",
   source: "전체",
   attendanceStatus: "전체",
 };
@@ -173,8 +170,9 @@ const copyText = async (text: string) => {
 const normalizeParticipantDraft = (draft: ParticipantDraft): ParticipantDraft => ({
   name: draft.name.trim(),
   organization: draft.organization.trim(),
-  phone: draft.phone.trim(),
-  email: draft.email.trim(),
+  position: draft.position.trim(),
+  phone: "",
+  email: "",
   attendanceType: draft.attendanceType,
   note: draft.note.trim(),
 });
@@ -185,12 +183,43 @@ const validateParticipantDraft = (draft: ParticipantDraft) => {
 
   if (!normalized.name) errors.push("성명을 입력해 주세요.");
   if (!normalized.organization) errors.push("소속을 입력해 주세요.");
-  if (normalized.phone && !isValidPhone(normalized.phone)) {
-    errors.push("연락처 형식을 확인해 주세요. 예: 010-1234-5678");
-  }
+  if (!normalized.position) errors.push("직위를 입력해 주세요.");
 
   return errors;
 };
+
+const emptyRosterRow = (): EventRosterRow => ({ ...emptyParticipantForm });
+
+const getRosterRowCount = (capacity: string) => {
+  const parsed = Number(capacity);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 200) : 5;
+};
+
+const resizeRosterRows = (rows: EventRosterRow[], capacity: string) => {
+  const count = getRosterRowCount(capacity);
+  if (rows.length === count) return rows;
+  if (rows.length > count) return rows.slice(0, count);
+  return [...rows, ...Array.from({ length: count - rows.length }, emptyRosterRow)];
+};
+
+const hasRosterRowValue = (row: EventRosterRow) =>
+  Boolean(row.name.trim() || row.organization.trim() || row.position.trim() || row.note.trim());
+
+const normalizeRosterRow = (row: EventRosterRow): EventRosterRow => {
+  const normalized = normalizeParticipantDraft(row);
+  const isOnline = normalized.note.includes("온라인") || normalized.attendanceType === "온라인";
+  return {
+    ...normalized,
+    attendanceType: isOnline ? "온라인" : "대면",
+    note: isOnline ? "온라인" : normalized.note,
+  };
+};
+
+const participantListNote = (participant: Participant) =>
+  participant.attendanceType === "온라인" ? "온라인" : (participant.note ?? "");
+
+const rosterDuplicateKey = (row: Pick<ParticipantDraft, "name" | "organization" | "position">) =>
+  [row.name, row.organization, row.position].map((value) => value.trim().replace(/\s+/g, "")).join("::");
 
 function AdminPage() {
   return <AdminDashboard mode="admin" />;
@@ -204,6 +233,10 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState<EventFormState>(emptyEventForm);
+  const [eventRosterRows, setEventRosterRows] = useState<EventRosterRow[]>(() =>
+    resizeRosterRows([], emptyEventForm.capacity),
+  );
+  const [eventRosterFileName, setEventRosterFileName] = useState("");
   const [eventError, setEventError] = useState("");
 
   const [participantForm, setParticipantForm] = useState<ParticipantDraft>(emptyParticipantForm);
@@ -315,7 +348,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     return selectedParticipants.filter((participant) => {
       if (filters.name && !participant.name.includes(filters.name.trim())) return false;
       if (filters.organization && !participant.organization.includes(filters.organization.trim())) return false;
-      if (filters.attendanceType !== "전체" && participant.attendanceType !== filters.attendanceType) return false;
       if (filters.source !== "전체" && participant.registrationSource !== filters.source) return false;
       if (filters.attendanceStatus !== "전체" && participant.attendanceStatus !== filters.attendanceStatus) return false;
       if (showDuplicatesOnly && !duplicateIds.has(participant.id)) return false;
@@ -327,17 +359,16 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     const fileKeys = new Map<string, number>();
 
     importRows.forEach((row) => {
-      const key = `${row.name.trim().replace(/\s+/g, "")}::${row.phone.replace(/[^0-9]/g, "")}`;
+      const key = rosterDuplicateKey(row);
       fileKeys.set(key, (fileKeys.get(key) ?? 0) + 1);
     });
 
     return importRows.map((row) => {
-      const key = `${row.name.trim().replace(/\s+/g, "")}::${row.phone.replace(/[^0-9]/g, "")}`;
+      const key = rosterDuplicateKey(row);
       return {
         ...row,
         duplicateWithExisting: selectedParticipants.some(
-          (participant) =>
-            `${participant.name.trim().replace(/\s+/g, "")}::${participant.phone.replace(/[^0-9]/g, "")}` === key,
+          (participant) => rosterDuplicateKey(participant) === key,
         ),
         duplicateInFile: (fileKeys.get(key) ?? 0) > 1,
       };
@@ -350,25 +381,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       return acc;
     }, {});
   }, [allParticipants, events]);
-
-  const faceToFaceCount = selectedParticipants.filter((participant) => participant.attendanceType === "대면").length;
-
-  const updatePublicRegistrationSettings = (patch: Partial<PublicRegistrationSettings>) => {
-    setEventForm((form) => {
-      const nextSettings = {
-        ...form.publicRegistrationSettings,
-        ...patch,
-      };
-
-      if ("collectPhone" in patch) nextSettings.requirePhone = Boolean(patch.collectPhone);
-      if ("collectEmail" in patch) nextSettings.requireEmail = Boolean(patch.collectEmail);
-
-      return {
-        ...form,
-        publicRegistrationSettings: nextSettings,
-      };
-    });
-  };
 
   const handleEventSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -390,9 +402,24 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     const publicRegistrationSettings: PublicRegistrationSettings = {
       ...eventForm.publicRegistrationSettings,
       mode: "both",
-      requirePhone: eventForm.publicRegistrationSettings.collectPhone,
-      requireEmail: eventForm.publicRegistrationSettings.collectEmail,
+      collectPhone: false,
+      requirePhone: false,
+      collectEmail: false,
+      requireEmail: false,
+      collectAttendanceType: false,
+      collectNote: false,
     };
+
+    const rosterRowsToSave = eventRosterRows.filter(hasRosterRowValue).map(normalizeRosterRow);
+    const incompleteRosterRow = rosterRowsToSave.find(
+      (row) => !row.name.trim() || !row.organization.trim() || !row.position.trim(),
+    );
+
+    if (incompleteRosterRow) {
+      setEventError("사전 명단은 소속, 직위, 성명을 모두 입력해 주세요.");
+      return;
+    }
+
     const savedEvent: Event = {
       id: previous?.id ?? createId("event"),
       title: eventForm.title.trim(),
@@ -413,7 +440,28 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
 
     try {
       await eventService.saveEvent(savedEvent);
+      if (rosterRowsToSave.length > 0) {
+        await participantService.saveParticipants(
+          rosterRowsToSave.map((row) => ({
+            id: createId("participant"),
+            eventId: savedEvent.id,
+            name: row.name,
+            organization: row.organization,
+            position: row.position,
+            phone: "",
+            email: undefined,
+            attendanceType: row.attendanceType,
+            note: row.note || undefined,
+            registrationSource: "admin",
+            createdAt: now,
+            attendanceStatus: "예정",
+            signed: false,
+          })),
+        );
+      }
       setEventForm(emptyEventForm);
+      setEventRosterRows(resizeRosterRows([], emptyEventForm.capacity));
+      setEventRosterFileName("");
       setEditingEventId(null);
       setSelectedEventId(savedEvent.id);
       setActiveTab("events");
@@ -449,6 +497,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
         mode: "both",
       },
     });
+    setEventRosterRows(resizeRosterRows([], event.capacity ? String(event.capacity) : ""));
+    setEventRosterFileName("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -481,6 +531,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       await eventService.seedSampleData(buildSampleData());
       setSelectedEventId(null);
       setImportRows([]);
+      setEventRosterRows(resizeRosterRows([], emptyEventForm.capacity));
+      setEventRosterFileName("");
       setActiveTab("events");
       refresh();
     } catch (error) {
@@ -616,12 +668,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     }
 
     const normalized = normalizeParticipantDraft(participantForm);
-    const hasDuplicate = normalized.phone
-      ? await participantService.hasDuplicateInEvent(selectedEvent.id, normalized.name, normalized.phone)
-      : await participantService.hasNameInEvent(selectedEvent.id, normalized.name);
-    const duplicateMessage = normalized.phone
-      ? "같은 이름과 연락처로 등록된 참가자가 있습니다. 그래도 등록할까요?"
-      : "같은 이름으로 등록된 참가자가 있습니다. 그래도 등록할까요?";
+    const hasDuplicate = await participantService.hasNameInEvent(selectedEvent.id, normalized.name);
+    const duplicateMessage = "같은 이름으로 등록된 참가자가 있습니다. 그래도 등록할까요?";
 
     if (hasDuplicate && !confirm(duplicateMessage)) {
       return;
@@ -632,7 +680,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
         id: createId("participant"),
         eventId: selectedEvent.id,
         ...normalized,
-        email: normalized.email || undefined,
+        attendanceType: normalized.note.includes("온라인") ? "온라인" : "대면",
         note: normalized.note || undefined,
         registrationSource: "admin",
         createdAt: new Date().toISOString(),
@@ -659,8 +707,9 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     const draft: ParticipantDraft = {
       name: editingParticipant.name,
       organization: editingParticipant.organization,
-      phone: editingParticipant.phone,
-      email: editingParticipant.email ?? "",
+      position: editingParticipant.position,
+      phone: "",
+      email: "",
       attendanceType: editingParticipant.attendanceType,
       note: editingParticipant.note ?? "",
     };
@@ -671,12 +720,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       return;
     }
 
-    const hasDuplicate = draft.phone
-      ? await participantService.hasDuplicateInEvent(selectedEvent.id, draft.name, draft.phone, editingParticipant.id)
-      : await participantService.hasNameInEvent(selectedEvent.id, draft.name, editingParticipant.id);
-    const duplicateMessage = draft.phone
-      ? "같은 이름과 연락처로 등록된 참가자가 있습니다. 수정 내용을 저장할까요?"
-      : "같은 이름으로 등록된 참가자가 있습니다. 수정 내용을 저장할까요?";
+    const hasDuplicate = await participantService.hasNameInEvent(selectedEvent.id, draft.name, editingParticipant.id);
+    const duplicateMessage = "같은 이름으로 등록된 참가자가 있습니다. 수정 내용을 저장할까요?";
 
     if (hasDuplicate && !confirm(duplicateMessage)) {
       return;
@@ -687,7 +732,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       await participantService.saveParticipant({
         ...editingParticipant,
         ...normalized,
-        email: normalized.email || undefined,
+        attendanceType: normalized.note.includes("온라인") ? "온라인" : "대면",
         note: normalized.note || undefined,
       });
       setEditingParticipant(null);
@@ -751,6 +796,29 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
     }
   };
 
+  const handleEventRosterImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const rows = await parseParticipantFile(file);
+      setEventRosterFileName(file.name);
+      setEventRosterRows(
+        rows.length > 0
+          ? rows.map((row) => normalizeRosterRow(row))
+          : resizeRosterRows([], eventForm.capacity),
+      );
+    } catch {
+      alert("파일을 읽을 수 없습니다. Excel 또는 CSV 파일인지 확인해 주세요.");
+    }
+  };
+
+  const updateEventRosterRow = (index: number, patch: Partial<EventRosterRow>) => {
+    setEventRosterRows((rows) =>
+      rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+    );
+  };
+
   const handleConfirmImport = async () => {
     if (!selectedEvent) return;
     if (!selectedEventUnlocked) {
@@ -780,10 +848,11 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
       eventId: selectedEvent.id,
       name: row.name.trim(),
       organization: row.organization.trim(),
-      phone: row.phone.trim(),
-      email: row.email.trim() || undefined,
+      position: row.position.trim(),
+      phone: "",
+      email: undefined,
       attendanceType: row.attendanceType,
-      note: row.note.trim() || undefined,
+      note: row.attendanceType === "온라인" ? "온라인" : (row.note.trim() || undefined),
       registrationSource: "admin",
       createdAt: now,
       attendanceStatus: "예정",
@@ -1067,6 +1136,8 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                 onClick={() => {
                   setEditingEventId(null);
                   setEventForm(emptyEventForm);
+                  setEventRosterRows(resizeRosterRows([], emptyEventForm.capacity));
+                  setEventRosterFileName("");
                   setEventError("");
                 }}
               >
@@ -1135,7 +1206,11 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                 min={1}
                 type="number"
                 value={eventForm.capacity}
-                onChange={(event) => setEventForm((form) => ({ ...form, capacity: event.target.value }))}
+                onChange={(event) => {
+                  const capacity = event.target.value;
+                  setEventForm((form) => ({ ...form, capacity }));
+                  setEventRosterRows((rows) => resizeRosterRows(rows, capacity));
+                }}
                 placeholder="예: 30"
               />
             </div>
@@ -1170,49 +1245,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                 onChange={(event) => setEventForm((form) => ({ ...form, registrationDeadline: event.target.value }))}
               />
             </div>
-            <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 lg:col-span-12">
-              <div>
-                  <p className="field-label">공개 등록 항목</p>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
-                      <input
-                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
-                        type="checkbox"
-                        checked={eventForm.publicRegistrationSettings.collectPhone}
-                        onChange={(event) => updatePublicRegistrationSettings({ collectPhone: event.target.checked })}
-                      />
-                      연락처 받기
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
-                      <input
-                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
-                        type="checkbox"
-                        checked={eventForm.publicRegistrationSettings.collectEmail}
-                        onChange={(event) => updatePublicRegistrationSettings({ collectEmail: event.target.checked })}
-                      />
-                      이메일 받기
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
-                      <input
-                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
-                        type="checkbox"
-                        checked={eventForm.publicRegistrationSettings.collectAttendanceType}
-                        onChange={(event) => updatePublicRegistrationSettings({ collectAttendanceType: event.target.checked })}
-                      />
-                      참석 형태 받기
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm font-medium text-ink-700">
-                      <input
-                        className="h-4 w-4 rounded border-ink-300 text-school-600 focus:ring-school-600"
-                        type="checkbox"
-                        checked={eventForm.publicRegistrationSettings.collectNote}
-                        onChange={(event) => updatePublicRegistrationSettings({ collectNote: event.target.checked })}
-                      />
-                      요청 사항 받기
-                    </label>
-                  </div>
-              </div>
-            </div>
             <div className="lg:col-span-8">
               <label className="field-label" htmlFor="event-description">
                 행사 안내문
@@ -1224,6 +1256,71 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                 onChange={(event) => setEventForm((form) => ({ ...form, description: event.target.value }))}
                 placeholder="참가자에게 보여 줄 안내 내용을 입력하세요."
               />
+            </div>
+            <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 lg:col-span-12">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="font-semibold text-ink-900">사전 명단</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button className="btn-secondary min-h-9 px-3 py-1.5" type="button" onClick={downloadParticipantTemplate}>
+                    <Download size={16} aria-hidden="true" />
+                    양식
+                  </button>
+                  <label className="btn-secondary min-h-9 cursor-pointer px-3 py-1.5">
+                    <Upload size={16} aria-hidden="true" />
+                    {eventRosterFileName || "엑셀 업로드"}
+                    <input className="sr-only" type="file" accept=".xlsx,.xls,.csv" onChange={handleEventRosterImportFile} />
+                  </label>
+                </div>
+              </div>
+              <div className="max-h-[420px] overflow-auto rounded-md border border-ink-200 bg-white">
+                <table className="min-w-[780px] w-full border-collapse">
+                  <thead className="sticky top-0 bg-ink-50 text-sm text-ink-700">
+                    <tr>
+                      <th className="table-cell w-14 text-center">순</th>
+                      <th className="table-cell">소속</th>
+                      <th className="table-cell">직위</th>
+                      <th className="table-cell">성명</th>
+                      <th className="table-cell">비고</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink-100">
+                    {eventRosterRows.map((row, index) => (
+                      <tr key={`event-roster-${index}`}>
+                        <td className="table-cell text-center text-ink-500">{index + 1}</td>
+                        <td className="table-cell">
+                          <input
+                            className="field-input"
+                            value={row.organization}
+                            onChange={(event) => updateEventRosterRow(index, { organization: event.target.value })}
+                          />
+                        </td>
+                        <td className="table-cell">
+                          <input
+                            className="field-input"
+                            value={row.position}
+                            onChange={(event) => updateEventRosterRow(index, { position: event.target.value })}
+                          />
+                        </td>
+                        <td className="table-cell">
+                          <input
+                            className="field-input"
+                            value={row.name}
+                            onChange={(event) => updateEventRosterRow(index, { name: event.target.value })}
+                          />
+                        </td>
+                        <td className="table-cell">
+                          <input
+                            className="field-input"
+                            value={row.note}
+                            onChange={(event) => updateEventRosterRow(index, { note: event.target.value })}
+                            placeholder="온라인"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             <div className="flex items-end lg:col-span-4">
               <button className="btn-primary w-full" type="submit">
@@ -1313,7 +1410,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                             </button>
                             <Link className="btn-secondary min-h-9 px-3 py-1.5" to={`/event/${event.id}/attendance`}>
                               <Printer size={16} aria-hidden="true" />
-                              출석부 인쇄
+                              등록부 인쇄
                             </Link>
                           </div>
                         </td>
@@ -1362,21 +1459,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                     <Download size={18} aria-hidden="true" />
                     전체 엑셀
                   </button>
-                  <button
-                    className="btn-secondary"
-                    type="button"
-                    onClick={() =>
-                      downloadParticipantsExcel(
-                        selectedEvent,
-                        selectedParticipants.filter((participant) => participant.attendanceType === "대면"),
-                        "대면_참석자",
-                      )
-                    }
-                    disabled={faceToFaceCount === 0}
-                  >
-                    <FileSpreadsheet size={18} aria-hidden="true" />
-                    대면 엑셀
-                  </button>
                 </div>
               </div>
             </div>
@@ -1403,37 +1485,13 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                       />
                     </label>
                     <label>
-                      <span className="field-label">연락처</span>
+                      <span className="field-label">직위 *</span>
                       <input
                         className="field-input"
-                        value={participantForm.phone}
-                        onChange={(event) => setParticipantForm((form) => ({ ...form, phone: event.target.value }))}
-                        placeholder="010-1234-5678"
+                        value={participantForm.position}
+                        onChange={(event) => setParticipantForm((form) => ({ ...form, position: event.target.value }))}
                       />
-                    </label>
-                    <label>
-                      <span className="field-label">이메일</span>
-                      <input
-                        className="field-input"
-                        type="email"
-                        value={participantForm.email}
-                        onChange={(event) => setParticipantForm((form) => ({ ...form, email: event.target.value }))}
-                      />
-                    </label>
-                    <label>
-                      <span className="field-label">참석 형태</span>
-                      <select
-                        className="field-input"
-                        value={participantForm.attendanceType}
-                        onChange={(event) => setParticipantForm((form) => ({ ...form, attendanceType: event.target.value as AttendanceType }))}
-                      >
-                        {ATTENDANCE_TYPES.map((mode) => (
-                          <option key={mode} value={mode}>
-                            {mode}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                      </label>
                     <label>
                       <span className="field-label">비고</span>
                       <textarea
@@ -1477,21 +1535,21 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                           <thead className="bg-ink-50">
                             <tr>
                               <th className="table-cell">행</th>
-                              <th className="table-cell">성명</th>
                               <th className="table-cell">소속</th>
-                              <th className="table-cell">연락처</th>
-                              <th className="table-cell">참석</th>
+                              <th className="table-cell">직위</th>
+                              <th className="table-cell">성명</th>
+                              <th className="table-cell">비고</th>
                               <th className="table-cell">확인</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-ink-100">
                             {importPreviewRows.map((row) => (
-                              <tr key={`${row.rowNumber}-${row.name}-${row.phone}`} className={row.errors.length ? "bg-red-50" : row.duplicateWithExisting || row.duplicateInFile ? "bg-amber-50" : "bg-white"}>
+                              <tr key={`${row.rowNumber}-${row.name}-${row.organization}-${row.position}`} className={row.errors.length ? "bg-red-50" : row.duplicateWithExisting || row.duplicateInFile ? "bg-amber-50" : "bg-white"}>
                                 <td className="table-cell">{row.rowNumber}</td>
-                                <td className="table-cell">{row.name}</td>
                                 <td className="table-cell">{row.organization}</td>
-                                <td className="table-cell">{row.phone}</td>
-                                <td className="table-cell">{row.attendanceType}</td>
+                                <td className="table-cell">{row.position}</td>
+                                <td className="table-cell">{row.name}</td>
+                                <td className="table-cell">{row.attendanceType === "온라인" ? "온라인" : row.note}</td>
                                 <td className="table-cell">
                                   {row.errors.length ? (
                                     <span className="text-red-700">{row.errors.join(", ")}</span>
@@ -1545,35 +1603,12 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                         />
                       </label>
                       <label>
-                        <span className="field-label">연락처</span>
+                        <span className="field-label">직위 *</span>
                         <input
                           className="field-input"
-                          value={editingParticipant.phone}
-                          onChange={(event) => setEditingParticipant((item) => (item ? { ...item, phone: event.target.value } : item))}
+                          value={editingParticipant.position}
+                          onChange={(event) => setEditingParticipant((item) => (item ? { ...item, position: event.target.value } : item))}
                         />
-                      </label>
-                      <label>
-                        <span className="field-label">이메일</span>
-                        <input
-                          className="field-input"
-                          type="email"
-                          value={editingParticipant.email ?? ""}
-                          onChange={(event) => setEditingParticipant((item) => (item ? { ...item, email: event.target.value } : item))}
-                        />
-                      </label>
-                      <label>
-                        <span className="field-label">참석 형태</span>
-                        <select
-                          className="field-input"
-                          value={editingParticipant.attendanceType}
-                          onChange={(event) => setEditingParticipant((item) => (item ? { ...item, attendanceType: event.target.value as AttendanceType } : item))}
-                        >
-                          {ATTENDANCE_TYPES.map((mode) => (
-                            <option key={mode} value={mode}>
-                              {mode}
-                            </option>
-                          ))}
-                        </select>
                       </label>
                       <label>
                         <span className="field-label">비고</span>
@@ -1603,12 +1638,12 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                       </button>
                       <Link className="btn-secondary min-h-9 px-3 py-1.5" to={`/event/${selectedEvent.id}/attendance`}>
                         <Printer size={16} aria-hidden="true" />
-                        출석부
+                        등록부
                       </Link>
                     </div>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-5">
+                  <div className="grid gap-3 md:grid-cols-4">
                     <label>
                       <span className="field-label">이름 검색</span>
                       <input
@@ -1624,21 +1659,6 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                         value={filters.organization}
                         onChange={(event) => setFilters((current) => ({ ...current, organization: event.target.value }))}
                       />
-                    </label>
-                    <label>
-                      <span className="field-label">참석 형태</span>
-                      <select
-                        className="field-input"
-                        value={filters.attendanceType}
-                        onChange={(event) => setFilters((current) => ({ ...current, attendanceType: event.target.value as ParticipantFilter["attendanceType"] }))}
-                      >
-                        <option value="전체">전체</option>
-                        {ATTENDANCE_TYPES.map((mode) => (
-                          <option key={mode} value={mode}>
-                            {mode}
-                          </option>
-                        ))}
-                      </select>
                     </label>
                     <label>
                       <span className="field-label">등록 경로</span>
@@ -1660,9 +1680,9 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                         onChange={(event) => setFilters((current) => ({ ...current, attendanceStatus: event.target.value as ParticipantFilter["attendanceStatus"] }))}
                       >
                         <option value="전체">전체</option>
-                        <option value="pending">확인 전</option>
-                        <option value="attended">참석</option>
-                        <option value="absent">미참석</option>
+                        <option value="예정">확인 전</option>
+                        <option value="참석">참석</option>
+                        <option value="미참석">미참석</option>
                       </select>
                     </label>
                   </div>
@@ -1691,20 +1711,19 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                         </button>
                       </div>
                       {duplicateGroups.length === 0 ? (
-                        <p className="mt-2 text-sm text-ink-700">같은 행사에서 이름과 연락처가 모두 같은 참가자가 없습니다.</p>
+                        <p className="mt-2 text-sm text-ink-700">같은 이름의 참가자가 없습니다.</p>
                       ) : (
                         <div className="mt-3 grid gap-2">
                           {duplicateGroups.map((group) => (
                             <div key={group.map((participant) => participant.id).join("-")} className="rounded-md border border-amber-100 bg-white p-3">
                               <p className="text-sm font-semibold text-ink-900">
                                 {group[0].name}
-                                {group[0].phone ? ` · ${group[0].phone}` : ""}
                               </p>
                               <div className="mt-2 grid gap-2">
                                 {group.map((participant) => (
                                   <div key={participant.id} className="flex flex-col gap-2 text-sm text-ink-700 sm:flex-row sm:items-center sm:justify-between">
                                     <span>
-                                      {participant.organization} · {registrationSourceLabels[participant.registrationSource]} · {formatShortDateTime(participant.createdAt)}
+                                      {participant.organization} · {participant.position || "-"} · {registrationSourceLabels[participant.registrationSource]}
                                     </span>
                                     <button className="btn-danger min-h-8 px-3 py-1" type="button" onClick={() => handleParticipantDelete(participant)}>
                                       <Trash2 size={14} aria-hidden="true" />
@@ -1721,19 +1740,17 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                   ) : null}
 
                   <div className="mt-4 overflow-x-auto rounded-lg border border-ink-200">
-                    <table className="min-w-[1180px] w-full border-collapse">
+                    <table className="min-w-[980px] w-full border-collapse">
                       <thead className="bg-ink-50 text-sm text-ink-700">
                         <tr>
                           <th className="table-cell">번호</th>
-                          <th className="table-cell">성명</th>
                           <th className="table-cell">소속</th>
-                          <th className="table-cell">연락처</th>
-                          <th className="table-cell">이메일</th>
-                          <th className="table-cell">참석 형태</th>
+                          <th className="table-cell">직위</th>
+                          <th className="table-cell">성명</th>
                           <th className="table-cell">등록 경로</th>
                           <th className="table-cell">등록 시각</th>
                           <th className="table-cell">참석 확인 여부</th>
-                          <th className="table-cell">서명 여부</th>
+                          <th className="table-cell">서명</th>
                           <th className="table-cell">비고</th>
                           <th className="table-cell">수정</th>
                           <th className="table-cell">삭제</th>
@@ -1742,7 +1759,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                       <tbody className="divide-y divide-ink-100">
                         {filteredParticipants.length === 0 ? (
                           <tr>
-                            <td className="px-5 py-8 text-center text-sm text-ink-500" colSpan={13}>
+                            <td className="px-5 py-8 text-center text-sm text-ink-500" colSpan={11}>
                               조건에 맞는 참가자가 없습니다.
                             </td>
                           </tr>
@@ -1750,11 +1767,9 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                           filteredParticipants.map((participant, index) => (
                             <tr key={participant.id} className={duplicateIds.has(participant.id) ? "bg-amber-50" : "bg-white"}>
                               <td className="table-cell">{index + 1}</td>
-                              <td className="table-cell font-semibold text-ink-900">{participant.name}</td>
                               <td className="table-cell">{participant.organization}</td>
-                              <td className="table-cell">{participant.phone || "-"}</td>
-                              <td className="table-cell">{participant.email || "-"}</td>
-                              <td className="table-cell">{participant.attendanceType}</td>
+                              <td className="table-cell">{participant.position || "-"}</td>
+                              <td className="table-cell font-semibold text-ink-900">{participant.name}</td>
                               <td className="table-cell">
                                 <span className={`badge ${sourceBadgeClass[participant.registrationSource]}`}>{registrationSourceLabels[participant.registrationSource]}</span>
                               </td>
@@ -1789,7 +1804,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                                   </button>
                                 </div>
                               </td>
-                              <td className="table-cell max-w-64 truncate">{participant.note || "-"}</td>
+                              <td className="table-cell max-w-64 truncate">{participantListNote(participant) || "-"}</td>
                               <td className="table-cell">
                                 <button className="btn-secondary min-h-8 px-3 py-1" type="button" onClick={() => setEditingParticipant(participant)}>
                                   <Edit3 size={14} aria-hidden="true" />
@@ -1822,7 +1837,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
                 <p className="text-sm font-semibold text-school-700">행사 관리 권한 필요</p>
                 <h2 className="mt-1 text-xl font-semibold text-ink-900">{selectedEvent.title}</h2>
                 <p className="mt-1 text-sm leading-6 text-ink-600">
-                  참가자 명단, 엑셀 다운로드, 출석부 인쇄, 행사 수정은 학교 관리자 또는 이 행사의 담당 교사만 사용할 수 있습니다.
+                  참가자 명단, 엑셀 다운로드, 등록부 인쇄, 행사 수정은 학교 관리자 또는 이 행사의 담당 교사만 사용할 수 있습니다.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <button className="btn-secondary" type="button" onClick={() => copyText(getPublicEventUrl(selectedEvent.id))}>

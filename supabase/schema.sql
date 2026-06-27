@@ -36,6 +36,7 @@ create table if not exists public.participants (
   event_id text not null references public.events(id) on delete cascade,
   name text not null,
   organization text not null,
+  position text not null default '',
   phone text not null default '',
   email text,
   attendance_type text not null default '미정',
@@ -52,6 +53,9 @@ create index if not exists events_owner_user_id_idx on public.events(owner_user_
 create index if not exists participants_event_id_idx on public.participants(event_id);
 create index if not exists participants_created_at_idx on public.participants(created_at);
 create index if not exists teacher_users_username_idx on public.teacher_users(username);
+
+alter table public.participants
+  add column if not exists position text not null default '';
 
 alter table public.teacher_users enable row level security;
 alter table public.events enable row level security;

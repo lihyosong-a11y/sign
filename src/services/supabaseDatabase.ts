@@ -34,6 +34,7 @@ type ParticipantRow = {
   event_id: string;
   name: string;
   organization: string;
+  position: string | null;
   phone: string | null;
   email: string | null;
   attendance_type: Participant["attendanceType"];
@@ -132,6 +133,7 @@ export const toParticipant = (row: ParticipantRow): Participant => ({
   eventId: row.event_id,
   name: row.name,
   organization: row.organization,
+  position: row.position ?? "",
   phone: row.phone ?? "",
   email: row.email || undefined,
   attendanceType: row.attendance_type,
@@ -148,6 +150,7 @@ export const fromParticipant = (participant: Participant): ParticipantRow => ({
   event_id: participant.eventId,
   name: participant.name,
   organization: participant.organization,
+  position: participant.position ?? "",
   phone: participant.phone ?? "",
   email: participant.email || null,
   attendance_type: participant.attendanceType,

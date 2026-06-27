@@ -11,6 +11,7 @@ export interface Participant {
   eventId: string;
   name: string;
   organization: string;
+  position: string;
   phone: string;
   email?: string;
   attendanceType: AttendanceType;
@@ -25,6 +26,7 @@ export interface Participant {
 export interface ParticipantDraft {
   name: string;
   organization: string;
+  position: string;
   phone: string;
   email: string;
   attendanceType: AttendanceType;

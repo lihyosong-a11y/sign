@@ -3,7 +3,7 @@ import { duplicateKey, normalizeName } from "../utils/format";
 import { readDatabase, sortParticipants, writeDatabase } from "./localDatabase";
 import { supabaseDatabase, withSupabaseFallback } from "./supabaseDatabase";
 
-export type PublicSignatureCandidate = Pick<Participant, "id" | "name" | "organization" | "attendanceType" | "signed">;
+export type PublicSignatureCandidate = Pick<Participant, "id" | "name" | "organization" | "position" | "signed">;
 
 export const participantService = {
   async getAllParticipantsForAdmin(): Promise<Participant[]> {
@@ -50,11 +50,11 @@ export const participantService = {
       async (client) =>
         (await supabaseDatabase.getParticipantsByEventId(client, eventId))
           .filter((participant) => participant.registrationSource === "admin")
-          .map(({ id, name, organization, attendanceType, signed }) => ({
+          .map(({ id, name, organization, position, signed }) => ({
             id,
             name,
             organization,
-            attendanceType,
+            position,
             signed,
           })),
       () =>
@@ -62,11 +62,11 @@ export const participantService = {
           readDatabase().participants.filter(
             (participant) => participant.eventId === eventId && participant.registrationSource === "admin",
           ),
-        ).map(({ id, name, organization, attendanceType, signed }) => ({
+        ).map(({ id, name, organization, position, signed }) => ({
           id,
           name,
           organization,
-          attendanceType,
+          position,
           signed,
         })),
     );

@@ -20,7 +20,7 @@ export const defaultPublicRegistrationSettings: PublicRegistrationSettings = {
   requirePhone: false,
   collectEmail: false,
   requireEmail: false,
-  collectAttendanceType: true,
+  collectAttendanceType: false,
   collectNote: false,
 };
 
