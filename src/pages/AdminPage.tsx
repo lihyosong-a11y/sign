@@ -581,7 +581,7 @@ export function AdminDashboard({ mode = "admin", teacherUser, onLogout }: AdminD
   const handleToggleTeacherActive = async (user: TeacherUser) => {
     try {
       await userService.setTeacherUserActive(user.id, !user.active);
-      setTeacherNotice(user.active ? "담당 교사 계정을 비활성화했습니다." : "담당 교사 계정을 활성화했습니다.");
+      setTeacherNotice(user.active ? "비활성화했습니다. 이제 삭제할 수 있습니다." : "활성화했습니다.");
       refresh();
     } catch (error) {
       setTeacherNotice(error instanceof Error ? error.message : "계정 상태를 변경하지 못했습니다.");

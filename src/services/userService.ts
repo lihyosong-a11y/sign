@@ -91,7 +91,9 @@ export const userService = {
     return withSupabaseFallback(
       "담당자 계정 삭제",
       async (client) => {
-        if (await supabaseDatabase.teacherUserHasEvents(client, userId)) {
+        const user = await supabaseDatabase.getTeacherUserById(client, userId);
+
+        if (user?.active && (await supabaseDatabase.teacherUserHasEvents(client, userId))) {
           throw new StorageRuleError("이 계정으로 만든 행사가 있어 삭제할 수 없습니다. 비활성화를 사용해 주세요.");
         }
 
@@ -99,13 +101,17 @@ export const userService = {
       },
       () => {
         const state = readDatabase();
+        const user = state.users.find((item) => item.id === userId);
 
-        if (state.events.some((event) => event.ownerUserId === userId)) {
+        if (user?.active && state.events.some((event) => event.ownerUserId === userId)) {
           throw new Error("이 계정으로 만든 행사가 있어 삭제할 수 없습니다. 비활성화를 사용해 주세요.");
         }
 
         writeDatabase({
           ...state,
+          events: state.events.map((event) =>
+            event.ownerUserId === userId ? { ...event, ownerUserId: undefined, updatedAt: new Date().toISOString() } : event,
+          ),
           users: state.users.filter((user) => user.id !== userId),
         });
       },
